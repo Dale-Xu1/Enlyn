@@ -1,6 +1,6 @@
 grammar Enlyn;
 
-program : expr EOF;
+program : EOF;
 end : ';' | NEWLINE;
 
 stmtList : stmt (end stmt)*;
@@ -17,13 +17,13 @@ expr
     | expr '!'                                                 # assert
 
     | op = ('-' | '!') expr                                    # unary
-    | left = expr op = ('*' | '/' | '%') right = expr          # binary
-    | left = expr op = ('+' | '-') right = expr                # binary
+    | left = expr op = ('*' | '/' | '%')         right = expr  # binary
+    | left = expr op = ('+' | '-')               right = expr  # binary
     | left = expr op = ('<' | '>' | '<=' | '>=') right = expr  # binary
-    | left = expr op = ('==' | '!=') right = expr              # binary
-    | left = expr op = '&' right = expr                        # binary
-    | left = expr op = '|' right = expr                        # binary
-    | left = expr op = '=' right = expr                        # binary
+    | left = expr op = ('==' | '!=')             right = expr  # binary
+    | left = expr op = '&'                       right = expr  # binary
+    | left = expr op = '|'                       right = expr  # binary
+    | <assoc = right> target = expr '=' value = expr           # assign
     | '(' expr ')'                                             # group
 
     | value = IDENTIFIER                                       # identifier

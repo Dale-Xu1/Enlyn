@@ -9,7 +9,7 @@ EnlynLexerFilter lexer = new(stream);
 CommonTokenStream tokens = new(lexer);
 EnlynParser parser = new(tokens);
 
-EnlynParser.ProgramContext context = parser.program();
+EnlynParser.ExprContext context = parser.expr();
 ParseTreeVisitor visitor = new();
 
-INode tree = visitor.Visit(context);
+IExpressionNode tree = visitor.VisitExpr(context);
