@@ -95,15 +95,14 @@ public class ParserTest
     [TestMethod]
     public void TestCall()
     {
-        string input = "f(1, 2, 3, 4, 5)";
+        string input = "null(1, 2, 3, 4, 5)";
             
         EnlynParser.ExprContext context = InitParser(input).expr();
         ParseTreeVisitor visitor = new();
 
         CallNode tree = (CallNode) visitor.VisitExpr(context);
-        IdentifierNode target = (IdentifierNode) tree.Target;
-
-        Assert.AreEqual("f", target.Value);
+        
+        Assert.IsInstanceOfType(tree.Target, typeof(NullNode));
         Assert.AreEqual(5, tree.Arguments.Length);
     }
 

@@ -6,7 +6,7 @@ end : ';' | NEWLINE;
 stmtList : stmt (end stmt)*;
 block : '{' stmtList? '}';
 stmt
-    : expr
+    : expr  #exprStmt
     ;
 
 exprList : expr (',' expr)*;
@@ -30,6 +30,8 @@ expr
     | value = NUMBER                                           # number
     | value = STRING                                           # string
     | value = BOOLEAN                                          # boolean
+    | THIS                                                     # this
+    | BASE                                                     # base
     | NULL                                                     # null
     ;
 
@@ -79,9 +81,6 @@ OVERRIDE   : 'override';
 BINARY     : 'binary';
 UNARY      : 'unary';
 
-THIS       : 'this';
-BASE       : 'base';
-
 LET        : 'let';
 RETURN     : 'return';
 
@@ -95,6 +94,9 @@ DEFAULT    : 'default';
 
 WHILE      : 'while';
 DO         : 'do';
+
+THIS       : 'this';
+BASE       : 'base';
 
 BOOLEAN    : 'true' | 'false';
 NULL       : 'null';
