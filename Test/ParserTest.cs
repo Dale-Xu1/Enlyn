@@ -6,25 +6,29 @@ using Enlyn;
 public class ParserTest
 {
 
-    private static IList<IToken> InitTokens(string input)
-    {
-        AntlrInputStream inputStream = new(input);
-        EnlynLexerFilter lexer = new(inputStream);
-
-        CommonTokenStream tokens = new(lexer);
-        tokens.Fill();
-
-        return tokens.GetTokens();
-    }
-
-    private static EnlynParser Init(string input)
+    private static EnlynLexerFilter InitLexer(string input)
     {
         AntlrInputStream stream = new(input);
         EnlynLexerFilter lexer = new(stream);
 
-        CommonTokenStream tokens = new(lexer);
-        EnlynParser parser = new(tokens);
+        return lexer;
+    }
 
+    private static IList<IToken> InitTokens(string input)
+    {
+        EnlynLexerFilter lexer = InitLexer(input);
+        CommonTokenStream tokens = new(lexer);
+
+        tokens.Fill();
+        return tokens.GetTokens();
+    }
+    
+    private static EnlynParser InitParser(string input)
+    {
+        EnlynLexerFilter lexer = InitLexer(input);
+        CommonTokenStream tokens = new(lexer);
+
+        EnlynParser parser = new(tokens);
         return parser;
     }
 
@@ -51,33 +55,30 @@ public class ParserTest
     public void TestIgnoreNewline()
     {
         string input = string.Join(Environment.NewLine,
-            "1 +",
+            "1 <",
             "{",
-            "  2",
+            "  true",
             "");
 
-        int newlines = 0;
         foreach (IToken token in InitTokens(input))
         {
             string name = EnlynLexer.DefaultVocabulary.GetSymbolicName(token.Type);
             Console.WriteLine($"{name,-15} '{token.Text}'");
 
-            if (token.Type == EnlynLexer.NEWLINE) newlines++;
+            Assert.AreNotEqual(EnlynLexer.NEWLINE, token.Type);
         }
-
-        Assert.AreEqual(0, newlines);
     }
     
     [TestMethod]
     public void TestExpr()
     {
         string input = string.Join(Environment.NewLine,
-            "1 + \"hi\"");
+            "false + (\"Hello\\n\")");
             
-        EnlynParser.ExprContext context = Init(input).expr();
-        EnlynVisitor visitor = new();
+        EnlynParser.ProgramContext context = InitParser(input).program();
+        ParseTreeVisitor visitor = new();
 
-        visitor.Visit(context);
+        INode tree = visitor.Visit(context);
     }
 
 }

@@ -1,99 +1,116 @@
 grammar Enlyn;
 
-expr :
-    | expr '+' expr
-    | expr '-' expr
-    | expr '*' expr
-    | expr '/' expr
-    | '(' expr ')'
-    | literal
+program : expr EOF;
+end : ';' | NEWLINE;
+
+stmtList : stmt (end stmt)*;
+block : '{' stmtList? '}';
+stmt
+    : expr
     ;
 
-literal :
-    | IDENTIFIER
-    | NUMBER
-    | STRING
+exprList : expr (',' expr)*;
+expr
+    : expr '.' member = IDENTIFIER                             # access
+    | expr '(' arguments = exprList? ')'                       # call
+    | NEW type = IDENTIFIER '(' arguments = exprList? ')'      # new
+    | expr '!'                                                 # assert
+
+    | op = ('-' | '!') expr                                    # unary
+    | left = expr op = ('*' | '/' | '%') right = expr          # binary
+    | left = expr op = ('+' | '-') right = expr                # binary
+    | left = expr op = ('<' | '>' | '<=' | '>=') right = expr  # binary
+    | left = expr op = ('==' | '!=') right = expr              # binary
+    | left = expr op = '&' right = expr                        # binary
+    | left = expr op = '|' right = expr                        # binary
+    | left = expr op = '=' right = expr                        # binary
+    | '(' expr ')'                                             # group
+
+    | value = IDENTIFIER                                       # identifier
+    | value = NUMBER                                           # number
+    | value = STRING                                           # string
+    | value = BOOLEAN                                          # boolean
+    | NULL                                                     # null
     ;
 
-WHITESPACE : [ \t]+ -> skip ;
-NEWLINE    : NEXT | COMMENT ;
+WHITESPACE : [ \t]+ -> skip;
+NEWLINE    : NEXT | COMMENT;
 
-AND        : '&' ;
-OR         : '|' ;
+AND        : '&';
+OR         : '|';
 
-EQUAL      : '=' ;
-DEQUAL     : '==' ;
-NEQUAL     : '!=' ;
+EQUAL      : '=';
+DEQUAL     : '==';
+NEQUAL     : '!=';
 
-LESS       : '<' ;
-GREATER    : '>' ;
-LEQUAL     : '<=' ;
-GEQUAL     : '>=' ;
+LESS       : '<';
+GREATER    : '>';
+LEQUAL     : '<=';
+GEQUAL     : '>=';
 
-PLUS       : '+' ;
-MINUS      : '-' ;
-STAR       : '*' ;
-SLASH      : '/' ;
-PERCENT    : '%' ;
+PLUS       : '+';
+MINUS      : '-';
+STAR       : '*';
+SLASH      : '/';
+PERCENT    : '%';
 
-DOT        : '.' ;
-COMMA      : ',' ;
-COLON      : ':' ;
-SEMI       : ';' ;
+DOT        : '.';
+COMMA      : ',';
+COLON      : ':';
+SEMI       : ';';
 
-QUESTION   : '?' ;
-EXCLAIM    : '!' ;
-ARROW      : '->' ;
+QUESTION   : '?';
+EXCLAIM    : '!';
+ARROW      : '->';
 
-LPAREN     : '(' ;
-RPAREN     : ')' ;
-LBRACE     : '{' ;
-RBRACE     : '}' ;
+LPAREN     : '(';
+RPAREN     : ')';
+LBRACE     : '{';
+RBRACE     : '}';
 
-CLASS      : 'class' ;
-NEW        : 'new' ;
+CLASS      : 'class';
+NEW        : 'new';
 
-PUBLIC     : 'public' ;
-PRIVATE    : 'private' ;
-PROTECTED  : 'protected' ;
-OVERRIDE   : 'override' ;
+PUBLIC     : 'public';
+PRIVATE    : 'private';
+PROTECTED  : 'protected';
+OVERRIDE   : 'override';
 
-BINARY     : 'binary' ;
-UNARY      : 'unary' ;
+BINARY     : 'binary';
+UNARY      : 'unary';
 
-THIS       : 'this' ;
-BASE       : 'base' ;
+THIS       : 'this';
+BASE       : 'base';
 
-LET        : 'let' ;
-RETURN     : 'return' ;
+LET        : 'let';
+RETURN     : 'return';
 
-IF         : 'if' ;
-THEN       : 'then' ;
-ELSE       : 'else' ;
+IF         : 'if';
+THEN       : 'then';
+ELSE       : 'else';
 
-MATCH      : 'match' ;
-CASE       : 'case' ;
-DEFAULT    : 'default' ;
+MATCH      : 'match';
+CASE       : 'case';
+DEFAULT    : 'default';
 
-WHILE      : 'while' ;
-DO         : 'do' ;
+WHILE      : 'while';
+DO         : 'do';
 
-TRUE       : 'true' ;
-FALSE      : 'false' ;
-NULL       : 'null' ;
+BOOLEAN    : 'true' | 'false';
+NULL       : 'null';
 
-IDENTIFIER : LETTER (LETTER | DIGIT)* ;
-NUMBER     : '-'? (INT | FLOAT) EXPONENT? ;
-STRING     : '"' (~["\r\n\\] | ESCAPE)* '"' ;
+IDENTIFIER : LETTER (LETTER | DIGIT)*;
+NUMBER     : '-'? (INT | FLOAT) EXPONENT?;
+STRING     : '"' (~["\r\n\\] | ESCAPE)* '"';
 
-fragment NEXT     : [\r\n] | '\r\n' ;
-fragment COMMENT  : '//' ~[\r\n]* NEXT ;
+fragment NEXT     : [\r\n] | '\r\n';
+fragment COMMENT  : '//' ~[\r\n]* NEXT;
 
-fragment DIGIT    : [0-9] ;
-fragment LETTER   : [a-zA-Z_] ;
+fragment DIGIT    : [0-9];
+fragment LETTER   : [a-zA-Z_];
 
-fragment INT      : DIGIT+ ;
-fragment FLOAT    : DIGIT* '.' DIGIT+ ;
-fragment EXPONENT : [eE] [+-]? DIGIT+ ;
+fragment INT      : DIGIT+;
+fragment FLOAT    : DIGIT* '.' DIGIT+;
+fragment EXPONENT : [eE] [+-]? DIGIT+;
 
-fragment ESCAPE   : '\\' [tnrbf"\\] ;
+fragment ESCAPE   : '\\' [tnrbf"\\];
