@@ -1,19 +1,39 @@
 grammar Enlyn;
 
-program : EOF;
+program : classes = classList? EOF;
 end : ';' | NEWLINE;
+
+classList : classDefinition (end classDefinition)*;
+classDefinition : CLASS id = IDENTIFIER (':' parent = IDENTIFIER)? '{' members = memberList? '}';
+
+memberList : member (end member)*;
+visibility : PUBLIC | PROTECTED | PRIVATE;
+member
+    : visibility id = IDENTIFIER ':' type = typeExpr ('=' expr)?                            # field
+//     | visibility OVERRIDE? identifier = IDENTIFIER '(' parameters = paramList? ')' (block | '=' expr)  # method
+//     | visibility NEW '(' parameters = paramList? ')'
+//         (':' BASE '(' arguments = exprList? ')')? (block | '=' expr)                                # constructor
+    ;
+
+paramList : param (',' param)*;
+param : id = IDENTIFIER ':' type = typeExpr;
 
 stmtList : stmt (end stmt)*;
 block : '{' stmtList? '}';
 stmt
-    : expr  #exprStmt
+    : expr                                                     #exprStmt
+    ;
+
+typeExpr
+    : typeExpr '?'                                             # option
+    | value = IDENTIFIER                                       # type
     ;
 
 exprList : expr (',' expr)*;
 expr
-    : expr '.' member = IDENTIFIER                             # access
-    | expr '(' arguments = exprList? ')'                       # call
-    | NEW type = IDENTIFIER '(' arguments = exprList? ')'      # new
+    : expr '.' id = IDENTIFIER                                 # access
+    | expr '(' args = exprList? ')'                            # call
+    | NEW type = IDENTIFIER '(' args = exprList? ')'           # new
     | expr '!'                                                 # assert
 
     | op = ('-' | '!') expr                                    # unary

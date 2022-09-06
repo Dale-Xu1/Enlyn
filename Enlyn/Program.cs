@@ -13,10 +13,8 @@ EnlynParser parser = new(tokens);
 parser.RemoveErrorListeners();
 parser.AddErrorListener(new ErrorListener(file));
 
-EnlynParser.ExprContext context = parser.expr();
 ParseTreeVisitor visitor = new();
-
-IExpressionNode tree = visitor.VisitExpr(context);
+ProgramNode tree = visitor.VisitProgram(parser.program());
 
 class ErrorListener : BaseErrorListener
 {

@@ -74,10 +74,10 @@ public class ParserTest
     {
         string input = "false * (\"Hello\\n\" + .2e-3)";
         
-        EnlynParser.ExprContext context = InitParser(input).expr();
+        EnlynParser parser = InitParser(input);
         ParseTreeVisitor visitor = new();
 
-        BinaryNode tree = (BinaryNode) visitor.VisitExpr(context);
+        BinaryNode tree = (BinaryNode) visitor.VisitExpr(parser.expr());
         BinaryNode right = (BinaryNode) tree.Right;
         
         Assert.AreEqual(Operation.Mul, tree.Operation);
@@ -96,14 +96,46 @@ public class ParserTest
     public void TestCall()
     {
         string input = "null(1, 2, 3, 4, 5)";
-            
-        EnlynParser.ExprContext context = InitParser(input).expr();
+        
+        EnlynParser parser = InitParser(input);
         ParseTreeVisitor visitor = new();
 
-        CallNode tree = (CallNode) visitor.VisitExpr(context);
+        CallNode tree = (CallNode) visitor.VisitExpr(parser.expr());
         
         Assert.IsInstanceOfType(tree.Target, typeof(NullNode));
         Assert.AreEqual(5, tree.Arguments.Length);
+    }
+    
+    [TestMethod]
+    public void TestEmptyCall()
+    {
+        string input = "f()";
+        
+        EnlynParser parser = InitParser(input);
+        ParseTreeVisitor visitor = new();
+
+        CallNode tree = (CallNode) visitor.VisitExpr(parser.expr());
+        Assert.AreEqual(0, tree.Arguments.Length);
+    }
+
+    [TestMethod]
+    public void TestProgram()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class Main : object",
+            "{",
+            // "    public x : int",
+            "}");
+            
+        EnlynParser parser = InitParser(input);
+        ParseTreeVisitor visitor = new();
+
+        ProgramNode program = visitor.VisitProgram(parser.program());
+        ClassNode tree = program.Classes[0];
+        
+        Assert.AreEqual(1, program.Classes.Length);
+        Assert.AreEqual("Main", tree.Identifier.Value);
+        Assert.AreEqual("object", tree.Parent?.Value);
     }
 
 }
