@@ -124,7 +124,7 @@ public class ParserTest
         string input = string.Join(Environment.NewLine,
             "class Main : object",
             "{",
-            // "    public x : int",
+            "    public x : int = 1 + 2",
             "}");
             
         EnlynParser parser = InitParser(input);
@@ -136,6 +136,31 @@ public class ParserTest
         Assert.AreEqual(1, program.Classes.Length);
         Assert.AreEqual("Main", tree.Identifier.Value);
         Assert.AreEqual("object", tree.Parent?.Value);
+
+        Assert.AreEqual(1, tree.Members.Length);
+        FieldNode field = (FieldNode) tree.Members[0];
+
+        Assert.AreEqual("x", field.Identifier.Value);
+        Assert.AreEqual("int", ((TypeNode) field.Type).Value);
+    }
+
+    [TestMethod]
+    public void TestMethod()
+    {
+        string input = "private main(a : float) -> int { 5 }";
+
+        EnlynParser parser = InitParser(input);
+        ParseTreeVisitor visitor = new();
+
+        MethodNode method = visitor.VisitMethod((EnlynParser.MethodContext) parser.member());
+
+        Assert.AreEqual(1, method.Parameters.Length);
+        ParameterNode parameter = method.Parameters[0];
+
+        Assert.AreEqual("a", parameter.Identifier.Value);
+        Assert.AreEqual("float", ((TypeNode) parameter.Type).Value);
+
+        Assert.AreEqual("int", ((TypeNode) method.Return!).Value);
     }
 
 }

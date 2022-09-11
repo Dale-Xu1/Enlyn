@@ -1,5 +1,6 @@
 namespace Enlyn;
 using Antlr4.Runtime;
+using Antlr4.Runtime.Tree;
 
 public interface INode { }
 public class ProgramNode : INode { public ClassNode[] Classes { get; set; } = null!; }
@@ -15,13 +16,41 @@ public class ClassNode : INode
 public enum Access { Public, Protected, Private }
 public abstract class MemberNode : INode { public Access Access { get; set; } }
 
-public class FieldNode : MemberNode { }
-public class MethodNode : MemberNode { }
-public class ConstructorNode : MemberNode { }
+public class FieldNode : MemberNode
+{
+    public IdentifierNode Identifier { get; set; } = null!;
+    public ITypeNode Type { get; set; } = null!;
+
+    public IExpressionNode? Expression { get; set; } = null;
+}
+
+public class MethodNode : MemberNode
+{
+    public IdentifierNode Identifier { get; set; } = null!;
+    public ParameterNode[] Parameters { get; set; } = null!;
+    public ITypeNode? Return { get; set; } = null;
+
+    public IStatementNode Body { get; set; } = null!;
+}
+
+public class ConstructorNode : MemberNode
+{
+    public ParameterNode[] Parameters { get; set; } = null!;
+    public IExpressionNode[] Arguments { get; set; } = null!;
+
+    public IStatementNode Body { get; set; } = null!;
+}
+
+public class ParameterNode : INode
+{
+    public IdentifierNode Identifier { get; set; } = null!;
+    public ITypeNode Type { get; set; } = null!;
+}
 
 
 public interface IStatementNode : INode { }
 
+public class BlockNode : IStatementNode { public IStatementNode[] Statements { get; set; } = null!; }
 public class ExpressionStatementNode : IStatementNode { public IExpressionNode Expression { get; set; } = null!; }
 
 
@@ -107,6 +136,7 @@ public abstract class ASTVisitor<T>
     public virtual T Visit(MethodNode node) => default!;
     public virtual T Visit(ConstructorNode node) => default!;
 
+    public virtual T Visit(BlockNode node) => default!;
     public virtual T Visit(ExpressionStatementNode node) => default!;
 
     public virtual T Visit(OptionNode node) => default!;
@@ -144,20 +174,84 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         return nodes;
     }
 
+
     public override ProgramNode VisitProgram(EnlynParser.ProgramContext context) =>
-        new() { Classes = VisitList<ClassNode>(context.classes?.classDefinition()) };
+        new() { Classes = VisitList<ClassNode>(context.classList()?.classDefinition()) };
 
-    public override ClassNode VisitClassDefinition(EnlynParser.ClassDefinitionContext context) => new()
+    public override ClassNode VisitClassDefinition(EnlynParser.ClassDefinitionContext context)
     {
-        Identifier = new TypeNode(context.id),
-        Parent = context.parent is null ? null : new TypeNode(context.parent),
+        IToken? parent = context.parent;
+        return new()
+        {
+            Identifier = new TypeNode(context.id),
+            Parent = parent is null ? null : new TypeNode(parent),
 
-        Members = VisitList<MemberNode>(context.members?.member())
+            Members = VisitList<MemberNode>(context.memberList()?.member())
+        };
+    }
+
+    private Access VisitAccess(EnlynParser.VisibilityContext context) => context.access.Type switch
+    {
+        EnlynParser.PUBLIC => Access.Public,
+        EnlynParser.PROTECTED => Access.Protected,
+        EnlynParser.PRIVATE => Access.Private,
+
+        _ => throw new Exception("Invalid access modifier")
+    };
+
+    public override FieldNode VisitField(EnlynParser.FieldContext context)
+    {
+        EnlynParser.ExprContext? expression = context.expr();
+        return new()
+        {
+            Access = VisitAccess(context.visibility()),
+
+            Identifier = new IdentifierNode(context.id),
+            Type = VisitTypeExpr(context.typeExpr()),
+
+            Expression = expression is null ? null : VisitExpr(expression)
+        };
+    }
+
+    public override MethodNode VisitMethod(EnlynParser.MethodContext context)
+    {
+        EnlynParser.TypeExprContext? type = context.typeExpr();
+        return new()
+        {
+            Access = VisitAccess(context.visibility()),
+
+            Identifier = new IdentifierNode(context.id),
+            Parameters = VisitList<ParameterNode>(context.paramList()?.param()),
+            Return = type is null ? null : VisitTypeExpr(type),
+
+            Body = VisitBlockStmt(context.block(), context.stmt())
+        };
+    }
+
+    public override ConstructorNode VisitConstructor(EnlynParser.ConstructorContext context) => new()
+    {
+        Access = VisitAccess(context.visibility()),
+
+        Arguments = VisitList<IExpressionNode>(context.exprList()?.expr()),
+        Parameters = VisitList<ParameterNode>(context.paramList()?.param()),
+
+        Body = VisitBlockStmt(context.block(), context.stmt())
+    };
+
+    public override ParameterNode VisitParam(EnlynParser.ParamContext context) => new()
+    {
+        Identifier = new IdentifierNode(context.id),
+        Type = VisitTypeExpr(context.typeExpr())
     };
 
 
     public IStatementNode VisitStmt(EnlynParser.StmtContext context) => (IStatementNode) Visit(context);
-    
+    private IStatementNode VisitBlockStmt(EnlynParser.BlockContext? a, EnlynParser.StmtContext? b) =>
+        (IStatementNode) Visit((IParseTree?) a ?? b);
+
+    public override BlockNode VisitBlock(EnlynParser.BlockContext context) =>
+        new() { Statements = VisitList<IStatementNode>(context.stmtList()?.stmt()) };
+
     public override ExpressionStatementNode VisitExprStmt(EnlynParser.ExprStmtContext context) =>
         new() { Expression = VisitExpr(context.expr()) };
 
@@ -179,13 +273,13 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
     public override CallNode VisitCall(EnlynParser.CallContext context) => new()
     {
         Target = VisitExpr(context.expr()),
-        Arguments = VisitList<IExpressionNode>(context.args?.expr())
+        Arguments = VisitList<IExpressionNode>(context.exprList()?.expr())
     };
 
     public override NewNode VisitNew(EnlynParser.NewContext context) => new()
     {
         Type = new TypeNode(context.type),
-        Arguments = VisitList<IExpressionNode>(context.args?.expr())
+        Arguments = VisitList<IExpressionNode>(context.exprList()?.expr())
     };
 
     public override AssertNode VisitAssert(EnlynParser.AssertContext context) =>

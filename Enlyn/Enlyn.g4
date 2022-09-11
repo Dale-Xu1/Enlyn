@@ -1,22 +1,21 @@
 grammar Enlyn;
 
-program : classes = classList? EOF;
-end : ';' | NEWLINE;
+program : classList? EOF;
+end     : ';' | NEWLINE;
 
 classList : classDefinition (end classDefinition)*;
-classDefinition : CLASS id = IDENTIFIER (':' parent = IDENTIFIER)? '{' members = memberList? '}';
+classDefinition : CLASS id = IDENTIFIER (':' parent = IDENTIFIER)? '{' memberList? '}';
 
 memberList : member (end member)*;
-visibility : PUBLIC | PROTECTED | PRIVATE;
+visibility : access = (PUBLIC | PROTECTED | PRIVATE);
 member
-    : visibility id = IDENTIFIER ':' type = typeExpr ('=' expr)?                            # field
-//     | visibility OVERRIDE? identifier = IDENTIFIER '(' parameters = paramList? ')' (block | '=' expr)  # method
-//     | visibility NEW '(' parameters = paramList? ')'
-//         (':' BASE '(' arguments = exprList? ')')? (block | '=' expr)                                # constructor
+    : visibility id = IDENTIFIER ':' typeExpr ('=' expr)?                                          # field
+    | visibility OVERRIDE? id = IDENTIFIER '(' paramList? ')' ('->' typeExpr)? (block | '=' stmt)  # method
+    | visibility NEW '(' paramList? ')' (':' BASE '(' exprList? ')')?          (block | '=' stmt)  # constructor
     ;
 
 paramList : param (',' param)*;
-param : id = IDENTIFIER ':' type = typeExpr;
+param : id = IDENTIFIER ':' typeExpr;
 
 stmtList : stmt (end stmt)*;
 block : '{' stmtList? '}';
@@ -32,8 +31,8 @@ typeExpr
 exprList : expr (',' expr)*;
 expr
     : expr '.' id = IDENTIFIER                                 # access
-    | expr '(' args = exprList? ')'                            # call
-    | NEW type = IDENTIFIER '(' args = exprList? ')'           # new
+    | expr '(' exprList? ')'                                   # call
+    | NEW type = IDENTIFIER '(' exprList? ')'                  # new
     | expr '!'                                                 # assert
 
     | op = ('-' | '!') expr                                    # unary
