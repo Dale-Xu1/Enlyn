@@ -26,7 +26,9 @@ public class FieldNode : MemberNode
 
 public class MethodNode : MemberNode
 {
-    public IdentifierNode Identifier { get; set; } = null!;
+    public bool Override { get; set; }
+
+    public IIdentifierNode Identifier { get; set; } = null!;
     public ParameterNode[] Parameters { get; set; } = null!;
     public ITypeNode? Return { get; set; } = null;
 
@@ -43,7 +45,7 @@ public class ConstructorNode : MemberNode
 
 public class ParameterNode : INode
 {
-    public IdentifierNode Identifier { get; set; } = null!;
+    public IIdentifierNode Identifier { get; set; } = null!;
     public ITypeNode Type { get; set; } = null!;
 }
 
@@ -56,6 +58,7 @@ public class ExpressionStatementNode : IStatementNode { public IExpressionNode E
 
 public interface ITypeNode : INode { }
 public interface IExpressionNode : INode { }
+public interface IIdentifierNode : INode { }
 
 public class OptionNode : ITypeNode { public ITypeNode Type { get; set; } = null!; }
 public class TypeNode : ITypeNode
@@ -113,10 +116,13 @@ public class UnaryNode : IExpressionNode
 }
 
 public abstract class LiteralNode<T> : IExpressionNode { public T Value { get; set; } = default!; }
-public class IdentifierNode : LiteralNode<string>
+public class IdentifierNode : LiteralNode<string>, IIdentifierNode
 {
     public IdentifierNode(IToken token) => Value = token.Text;
 }
+
+public class BinaryIdentifierNode : IIdentifierNode { public Operation Operation { get; set; } }
+public class UnaryIdentifierNode : IIdentifierNode { public Operation Operation { get; set; } }
 
 public class NumberNode : LiteralNode<double> { }
 public class StringNode : LiteralNode<string> { }
@@ -135,6 +141,7 @@ public abstract class ASTVisitor<T>
     public virtual T Visit(FieldNode node) => default!;
     public virtual T Visit(MethodNode node) => default!;
     public virtual T Visit(ConstructorNode node) => default!;
+    public virtual T Visit(ParameterNode node) => default!;
 
     public virtual T Visit(BlockNode node) => default!;
     public virtual T Visit(ExpressionStatementNode node) => default!;
@@ -150,6 +157,8 @@ public abstract class ASTVisitor<T>
     public virtual T Visit(BinaryNode node) => default!;
     public virtual T Visit(UnaryNode node) => default!;
     public virtual T Visit(IdentifierNode node) => default!;
+    public virtual T Visit(BinaryIdentifierNode node) => default!;
+    public virtual T Visit(UnaryIdentifierNode node) => default!;
     public virtual T Visit(NumberNode node) => default!;
     public virtual T Visit(StringNode node) => default!;
     public virtual T Visit(BooleanNode node) => default!;
@@ -215,12 +224,20 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
 
     public override MethodNode VisitMethod(EnlynParser.MethodContext context)
     {
+        EnlynParser.MethodNameContext name = context.methodName();
+        IIdentifierNode identifier;
+
+        if (name.BINARY() is not null) identifier = new BinaryIdentifierNode { Operation = MapBinary(name.op) };
+        else if (name.UNARY() is not null) identifier = new UnaryIdentifierNode { Operation = MapUnary(name.op) };
+        else identifier = new IdentifierNode(name.id);
+
         EnlynParser.TypeExprContext? type = context.typeExpr();
         return new()
         {
             Access = VisitAccess(context.visibility()),
+            Override = context.OVERRIDE() is not null,
 
-            Identifier = new IdentifierNode(context.id),
+            Identifier = identifier,
             Parameters = VisitList<ParameterNode>(context.paramList()?.param()),
             Return = type is null ? null : VisitTypeExpr(type),
 
@@ -293,42 +310,44 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
 
     public override BinaryNode VisitBinary(EnlynParser.BinaryContext context) => new()
     {
-        // Convert token to operation enum
-        Operation = context.op.Type switch
-        {
-            EnlynLexer.PLUS    => Operation.Add,
-            EnlynLexer.MINUS   => Operation.Sub,
-            EnlynLexer.STAR    => Operation.Mul,
-            EnlynLexer.SLASH   => Operation.Div,
-            EnlynLexer.PERCENT => Operation.Mod,
-
-            EnlynLexer.AND     => Operation.And,
-            EnlynLexer.OR      => Operation.Or,
-            
-            EnlynLexer.DEQUAL  => Operation.Eq,
-            EnlynLexer.NEQUAL  => Operation.Neq,
-            EnlynLexer.LESS    => Operation.Lt,
-            EnlynLexer.GREATER => Operation.Gt,
-            EnlynLexer.LEQUAL  => Operation.Le,
-            EnlynLexer.GEQUAL  => Operation.Ge,
-
-            _ => throw new Exception("Invalid binary operation")
-        },
-
+        Operation = MapBinary(context.op),
         Left = VisitExpr(context.left),
         Right = VisitExpr(context.right)
     };
 
     public override UnaryNode VisitUnary(EnlynParser.UnaryContext context) => new()
     {
-        Operation = context.op.Type switch
-        {
-            EnlynLexer.MINUS   => Operation.Neg,
-            EnlynLexer.EXCLAIM => Operation.Not,
-
-            _ => throw new Exception("Invalid unary operation")
-        },
+        Operation = MapUnary(context.op),
         Expression = VisitExpr(context.expr())
+    };
+
+    private Operation MapBinary(IToken token) => token.Type switch // Convert token to operation enum
+    {
+        EnlynLexer.PLUS    => Operation.Add,
+        EnlynLexer.MINUS   => Operation.Sub,
+        EnlynLexer.STAR    => Operation.Mul,
+        EnlynLexer.SLASH   => Operation.Div,
+        EnlynLexer.PERCENT => Operation.Mod,
+
+        EnlynLexer.AND     => Operation.And,
+        EnlynLexer.OR      => Operation.Or,
+        
+        EnlynLexer.DEQUAL  => Operation.Eq,
+        EnlynLexer.NEQUAL  => Operation.Neq,
+        EnlynLexer.LESS    => Operation.Lt,
+        EnlynLexer.GREATER => Operation.Gt,
+        EnlynLexer.LEQUAL  => Operation.Le,
+        EnlynLexer.GEQUAL  => Operation.Ge,
+
+        _ => throw new Exception("Invalid binary operation")
+    };
+
+    private Operation MapUnary(IToken token) => token.Type switch // Convert token to operation enum
+    {
+        EnlynLexer.MINUS   => Operation.Neg,
+        EnlynLexer.EXCLAIM => Operation.Not,
+
+        _ => throw new Exception("Invalid unary operation")
     };
 
     public override IExpressionNode VisitGroup(EnlynParser.GroupContext context) => VisitExpr(context.expr());

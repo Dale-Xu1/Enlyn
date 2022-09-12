@@ -9,9 +9,15 @@ classDefinition : CLASS id = IDENTIFIER (':' parent = IDENTIFIER)? '{' memberLis
 memberList : member (end member)*;
 visibility : access = (PUBLIC | PROTECTED | PRIVATE);
 member
-    : visibility id = IDENTIFIER ':' typeExpr ('=' expr)?                                          # field
-    | visibility OVERRIDE? id = IDENTIFIER '(' paramList? ')' ('->' typeExpr)? (block | '=' stmt)  # method
-    | visibility NEW '(' paramList? ')' (':' BASE '(' exprList? ')')?          (block | '=' stmt)  # constructor
+    : visibility id = IDENTIFIER ':' typeExpr ('=' expr)?                                     # field
+    | visibility OVERRIDE? methodName '(' paramList? ')' ('->' typeExpr)? (block | '=' stmt)  # method
+    | visibility NEW '(' paramList? ')' (':' BASE '(' exprList? ')')?     (block | '=' stmt)  # constructor
+    ;
+
+methodName
+    : id = IDENTIFIER
+    | BINARY op = ('+' | '-' | '*' | '/' | '%' | '&' | '|' | '==' | '!=' | '<' | '>' | '<=' | '>=')
+    | UNARY op = ('-' | '!')
     ;
 
 paramList : param (',' param)*;

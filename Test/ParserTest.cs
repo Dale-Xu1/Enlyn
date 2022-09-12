@@ -154,13 +154,46 @@ public class ParserTest
 
         MethodNode method = visitor.VisitMethod((EnlynParser.MethodContext) parser.member());
 
+        Assert.AreEqual(false, method.Override);
         Assert.AreEqual(1, method.Parameters.Length);
         ParameterNode parameter = method.Parameters[0];
 
-        Assert.AreEqual("a", parameter.Identifier.Value);
+        Assert.AreEqual("a", ((IdentifierNode) parameter.Identifier).Value);
         Assert.AreEqual("float", ((TypeNode) parameter.Type).Value);
 
         Assert.AreEqual("int", ((TypeNode) method.Return!).Value);
+    }
+
+    [TestMethod]
+    public void TestConstructor()
+    {
+        string input = "private new() : base(true) = 1";
+
+        EnlynParser parser = InitParser(input);
+        ParseTreeVisitor visitor = new();
+
+        ConstructorNode constructor = visitor.VisitConstructor((EnlynParser.ConstructorContext) parser.member());
+        
+        Assert.AreEqual(0, constructor.Parameters.Length);
+        Assert.AreEqual(1, constructor.Arguments.Length);
+
+        Assert.AreEqual(true, ((BooleanNode) constructor.Arguments[0]).Value);
+    }
+
+    [TestMethod]
+    public void TestOperation()
+    {
+        string input = "public override binary +() -> int { }";
+
+        EnlynParser parser = InitParser(input);
+        ParseTreeVisitor visitor = new();
+
+        MethodNode method = visitor.VisitMethod((EnlynParser.MethodContext) parser.member());
+
+        Assert.AreEqual(true, method.Override);
+        Assert.AreEqual(0, method.Parameters.Length);
+        
+        Assert.AreEqual(Operation.Add, ((BinaryIdentifierNode) method.Identifier).Operation);
     }
 
 }
