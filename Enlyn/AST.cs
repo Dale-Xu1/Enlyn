@@ -93,6 +93,18 @@ public class AssignNode : IExpressionNode
     public IExpressionNode Expression { get; set; } = null!;
 }
 
+public class InstanceNode : IExpressionNode
+{
+    public IExpressionNode Expression { get; set; } = null!;
+    public ITypeNode Type { get; set; } = null!;
+}
+
+public class CastNode : IExpressionNode
+{
+    public IExpressionNode Expression { get; set; } = null!;
+    public ITypeNode Type { get; set; } = null!;
+}
+
 public enum Operation
 {
     Add, Sub, Mul, Div, Mod,
@@ -154,6 +166,8 @@ public abstract class ASTVisitor<T>
     public virtual T Visit(NewNode node) => default!;
     public virtual T Visit(AssertNode node) => default!;
     public virtual T Visit(AssignNode node) => default!;
+    public virtual T Visit(InstanceNode node) => default!;
+    public virtual T Visit(CastNode node) => default!;
     public virtual T Visit(BinaryNode node) => default!;
     public virtual T Visit(UnaryNode node) => default!;
     public virtual T Visit(IdentifierNode node) => default!;
@@ -216,7 +230,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
             Access = VisitAccess(context.visibility()),
 
             Identifier = new IdentifierNode(context.id),
-            Type = VisitTypeExpr(context.typeExpr()),
+            Type = VisitType(context.type()),
 
             Expression = expression is null ? null : VisitExpr(expression)
         };
@@ -231,7 +245,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         else if (name.UNARY() is not null) identifier = new UnaryIdentifierNode { Operation = MapUnary(name.op) };
         else identifier = new IdentifierNode(name.id);
 
-        EnlynParser.TypeExprContext? type = context.typeExpr();
+        EnlynParser.TypeContext? type = context.type();
         return new()
         {
             Access = VisitAccess(context.visibility()),
@@ -239,7 +253,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
 
             Identifier = identifier,
             Parameters = VisitList<ParameterNode>(context.paramList()?.param()),
-            Return = type is null ? null : VisitTypeExpr(type),
+            Return = type is null ? null : VisitType(type),
 
             Body = VisitBlockStmt(context.block(), context.stmt())
         };
@@ -258,7 +272,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
     public override ParameterNode VisitParam(EnlynParser.ParamContext context) => new()
     {
         Identifier = new IdentifierNode(context.id),
-        Type = VisitTypeExpr(context.typeExpr())
+        Type = VisitType(context.type())
     };
 
 
@@ -274,12 +288,12 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
 
 
     public IExpressionNode VisitExpr(EnlynParser.ExprContext context) => (IExpressionNode) Visit(context);
-    public ITypeNode VisitTypeExpr(EnlynParser.TypeExprContext context) => (ITypeNode) Visit(context);
+    public ITypeNode VisitType(EnlynParser.TypeContext context) => (ITypeNode) Visit(context);
 
     public override OptionNode VisitOption(EnlynParser.OptionContext context) =>
-        new() { Type = VisitTypeExpr(context.typeExpr()) };
+        new() { Type = VisitType(context.type()) };
 
-    public override TypeNode VisitType(EnlynParser.TypeContext context) => new(context.value);
+    public override TypeNode VisitTypeIdentifier(EnlynParser.TypeIdentifierContext context) => new(context.value);
 
     public override AccessNode VisitAccess(EnlynParser.AccessContext context) => new()
     {
@@ -295,7 +309,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
 
     public override NewNode VisitNew(EnlynParser.NewContext context) => new()
     {
-        Type = new TypeNode(context.type),
+        Type = new TypeNode(context.id),
         Arguments = VisitList<IExpressionNode>(context.exprList()?.expr())
     };
 
@@ -307,6 +321,20 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         Target = VisitExpr(context.target),
         Expression = VisitExpr(context.value)
     };
+
+    public override InstanceNode VisitInstance(EnlynParser.InstanceContext context) => new()
+    {
+        Expression = VisitExpr(context.expr()),
+        Type = VisitType(context.type())
+    };
+
+    public override CastNode VisitCast(EnlynParser.CastContext context) => new()
+    {
+        Expression = VisitExpr(context.expr()),
+        Type = VisitType(context.type())
+    };
+
+    public override IExpressionNode VisitGroup(EnlynParser.GroupContext context) => VisitExpr(context.expr());
 
     public override BinaryNode VisitBinary(EnlynParser.BinaryContext context) => new()
     {
@@ -349,8 +377,6 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
 
         _ => throw new Exception("Invalid unary operation")
     };
-
-    public override IExpressionNode VisitGroup(EnlynParser.GroupContext context) => VisitExpr(context.expr());
 
     public override IdentifierNode VisitIdentifier(EnlynParser.IdentifierContext context) => new(context.value);
     public override NumberNode VisitNumber(EnlynParser.NumberContext context) =>

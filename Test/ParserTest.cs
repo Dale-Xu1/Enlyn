@@ -183,7 +183,7 @@ public class ParserTest
     [TestMethod]
     public void TestOperation()
     {
-        string input = "public override binary +() -> int { }";
+        string input = "public override binary +() -> int { true is boolean }";
 
         EnlynParser parser = InitParser(input);
         ParseTreeVisitor visitor = new();

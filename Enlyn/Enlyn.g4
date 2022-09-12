@@ -9,38 +9,43 @@ classDefinition : CLASS id = IDENTIFIER (':' parent = IDENTIFIER)? '{' memberLis
 memberList : member (end member)*;
 visibility : access = (PUBLIC | PROTECTED | PRIVATE);
 member
-    : visibility id = IDENTIFIER ':' typeExpr ('=' expr)?                                     # field
-    | visibility OVERRIDE? methodName '(' paramList? ')' ('->' typeExpr)? (block | '=' stmt)  # method
-    | visibility NEW '(' paramList? ')' (':' BASE '(' exprList? ')')?     (block | '=' stmt)  # constructor
+    : visibility id = IDENTIFIER ':' type ('=' expr)?                                     # field
+    | visibility OVERRIDE? methodName '(' paramList? ')' ('->' type)? (block | '=' stmt)  # method
+    | visibility NEW '(' paramList? ')' (':' BASE '(' exprList? ')')? (block | '=' stmt)  # constructor
     ;
 
 methodName
     : id = IDENTIFIER
     | BINARY op = ('+' | '-' | '*' | '/' | '%' | '&' | '|' | '==' | '!=' | '<' | '>' | '<=' | '>=')
-    | UNARY op = ('-' | '!')
+    | UNARY  op = ('-' | '!')
     ;
 
 paramList : param (',' param)*;
-param : id = IDENTIFIER ':' typeExpr;
+param : id = IDENTIFIER ':' type;
 
 stmtList : stmt (end stmt)*;
 block : '{' stmtList? '}';
 stmt
-    : expr                                                     #exprStmt
+    : LET id = IDENTIFIER (':' type)? '=' expr                 # let
+    | IF expr (block | THEN stmt) (ELSE (block | stmt))?       # if
+    | WHILE expr (block | DO stmt)                             # while
+    | RETURN expr?                                             # return
+    | expr                                                     # exprStmt
     ;
 
-typeExpr
-    : typeExpr '?'                                             # option
-    | value = IDENTIFIER                                       # type
+type
+    : type '?'                                                 # option
+    | value = IDENTIFIER                                       # typeIdentifier
     ;
 
 exprList : expr (',' expr)*;
 expr
     : expr '.' id = IDENTIFIER                                 # access
     | expr '(' exprList? ')'                                   # call
-    | NEW type = IDENTIFIER '(' exprList? ')'                  # new
+    | NEW id = IDENTIFIER '(' exprList? ')'                    # new
     | expr '!'                                                 # assert
 
+    | '(' expr ')'                                             # group
     | op = ('-' | '!') expr                                    # unary
     | left = expr op = ('*' | '/' | '%')         right = expr  # binary
     | left = expr op = ('+' | '-')               right = expr  # binary
@@ -48,8 +53,10 @@ expr
     | left = expr op = ('==' | '!=')             right = expr  # binary
     | left = expr op = '&'                       right = expr  # binary
     | left = expr op = '|'                       right = expr  # binary
+
     | <assoc = right> target = expr '=' value = expr           # assign
-    | '(' expr ')'                                             # group
+    | expr IS type                                             # instance
+    | expr AS type                                             # cast
 
     | value = IDENTIFIER                                       # identifier
     | value = NUMBER                                           # number
@@ -106,16 +113,15 @@ OVERRIDE   : 'override';
 BINARY     : 'binary';
 UNARY      : 'unary';
 
+IS         : 'is';
+AS         : 'as';
+
 LET        : 'let';
 RETURN     : 'return';
 
 IF         : 'if';
 THEN       : 'then';
 ELSE       : 'else';
-
-MATCH      : 'match';
-CASE       : 'case';
-DEFAULT    : 'default';
 
 WHILE      : 'while';
 DO         : 'do';
