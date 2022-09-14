@@ -52,6 +52,30 @@ public class ParameterNode : INode
 
 public interface IStatementNode : INode { }
 
+public class LetNode : IStatementNode
+{
+    public IdentifierNode Identifier { get; set; } = null!;
+    public ITypeNode? Type { get; set; } = null;
+
+    public IExpressionNode Expression { get; set; } = null!;
+}
+
+public class IfNode : IStatementNode
+{
+    public IExpressionNode Condition { get; set; } = null!;
+
+    public IStatementNode Then { get; set; } = null!;
+    public IStatementNode? Else { get; set; } = null;
+}
+
+public class WhileNode : IStatementNode
+{
+    public IExpressionNode Condition { get; set; } = null!;
+    public IStatementNode Body { get; set; } = null!;
+}
+
+public class ReturnNode : IStatementNode { public IExpressionNode? Expression { get; set; } = null; }
+
 public class BlockNode : IStatementNode { public IStatementNode[] Statements { get; set; } = null!; }
 public class ExpressionStatementNode : IStatementNode { public IExpressionNode Expression { get; set; } = null!; }
 
@@ -155,6 +179,10 @@ public abstract class ASTVisitor<T>
     public virtual T Visit(ConstructorNode node) => default!;
     public virtual T Visit(ParameterNode node) => default!;
 
+    public virtual T Visit(LetNode node) => default!;
+    public virtual T Visit(IfNode node) => default!;
+    public virtual T Visit(WhileNode node) => default!;
+    public virtual T Visit(ReturnNode node) => default!;
     public virtual T Visit(BlockNode node) => default!;
     public virtual T Visit(ExpressionStatementNode node) => default!;
 
@@ -184,7 +212,7 @@ public abstract class ASTVisitor<T>
 
 }
 
-public class ParseTreeVisitor : EnlynBaseVisitor<INode>
+public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range information
 {
 
     private T[] VisitList<T>(ParserRuleContext[]? contexts) where T : INode
@@ -279,6 +307,42 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
     public IStatementNode VisitStmt(EnlynParser.StmtContext context) => (IStatementNode) Visit(context);
     private IStatementNode VisitBlockStmt(EnlynParser.BlockContext? a, EnlynParser.StmtContext? b) =>
         (IStatementNode) Visit((IParseTree?) a ?? b);
+
+    public override LetNode VisitLet(EnlynParser.LetContext context)
+    {
+        EnlynParser.TypeContext? type = context.type();
+        return new()
+        {
+            Identifier = new IdentifierNode(context.id),
+            Type = type is null ? null : VisitType(type),
+            
+            Expression = VisitExpr(context.expr())
+        };
+    }
+
+    public override IfNode VisitIf(EnlynParser.IfContext context)
+    {
+        EnlynParser.ElseBranchContext? elseBranch = context.elseBranch();
+        return new()
+        {
+            Condition = VisitExpr(context.expr()),
+
+            Then = VisitBlockStmt(context.block(), context.stmt()),
+            Else = elseBranch is null ? null : VisitBlockStmt(elseBranch.block(), elseBranch.stmt())
+        };
+    }
+
+    public override WhileNode VisitWhile(EnlynParser.WhileContext context) => new()
+    {
+        Condition = VisitExpr(context.expr()),
+        Body = VisitBlockStmt(context.block(), context.stmt())
+    };
+
+    public override ReturnNode VisitReturn(EnlynParser.ReturnContext context)
+    {
+        EnlynParser.ExprContext? expression = context.expr();
+        return new() { Expression = expression is null ? null : VisitExpr(expression) };
+    }
 
     public override BlockNode VisitBlock(EnlynParser.BlockContext context) =>
         new() { Statements = VisitList<IStatementNode>(context.stmtList()?.stmt()) };

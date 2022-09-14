@@ -24,14 +24,16 @@ paramList : param (',' param)*;
 param : id = IDENTIFIER ':' type;
 
 stmtList : stmt (end stmt)*;
-block : '{' stmtList? '}';
 stmt
     : LET id = IDENTIFIER (':' type)? '=' expr                 # let
-    | IF expr (block | THEN stmt) (ELSE (block | stmt))?       # if
+    | IF expr (block | THEN stmt) elseBranch?                  # if
     | WHILE expr (block | DO stmt)                             # while
     | RETURN expr?                                             # return
     | expr                                                     # exprStmt
     ;
+
+block      : '{' stmtList? '}';
+elseBranch : ELSE (block | stmt);
 
 type
     : type '?'                                                 # option

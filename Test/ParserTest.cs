@@ -195,5 +195,47 @@ public class ParserTest
         
         Assert.AreEqual(Operation.Add, ((BinaryIdentifierNode) method.Identifier).Operation);
     }
+    
+    [TestMethod]
+    public void TestIfPrecedence()
+    {
+        string input = string.Join(Environment.NewLine,
+            "if x then if y then z",
+            "else w");
+            
+        EnlynParser parser = InitParser(input);
+        ParseTreeVisitor visitor = new();
+
+        IfNode branch = visitor.VisitIf((EnlynParser.IfContext) parser.stmt());
+        IfNode then = (IfNode) branch.Then;
+
+        Assert.AreEqual("x", ((IdentifierNode) branch.Condition).Value);
+        Assert.AreEqual("y", ((IdentifierNode) then.Condition).Value);
+        Assert.AreEqual("z", ((IdentifierNode) ((ExpressionStatementNode) then.Then).Expression).Value);
+        Assert.AreEqual("w", ((IdentifierNode) ((ExpressionStatementNode) then.Else!).Expression).Value);
+
+        Assert.AreEqual(null, branch.Else);
+    }
+
+    [TestMethod]
+    public void TestIfBlock()
+    {
+        string input = string.Join(Environment.NewLine,
+            "if x { if y then z }",
+            "else w");
+            
+        EnlynParser parser = InitParser(input);
+        ParseTreeVisitor visitor = new();
+
+        IfNode branch = visitor.VisitIf((EnlynParser.IfContext) parser.stmt());
+        IfNode then = (IfNode) ((BlockNode) branch.Then).Statements[0];
+        
+        Assert.AreEqual("x", ((IdentifierNode) branch.Condition).Value);
+        Assert.AreEqual("y", ((IdentifierNode) then.Condition).Value);
+        Assert.AreEqual("z", ((IdentifierNode) ((ExpressionStatementNode) then.Then).Expression).Value);
+        Assert.AreEqual("w", ((IdentifierNode) ((ExpressionStatementNode) branch.Else!).Expression).Value);
+        
+        Assert.AreEqual(null, then.Else);
+    }
 
 }
