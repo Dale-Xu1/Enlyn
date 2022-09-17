@@ -75,7 +75,7 @@ public class ParserTest
         string input = "false * (\"Hello\\n\" + .2e-3)";
         
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         BinaryNode tree = (BinaryNode) visitor.VisitExpr(parser.expr());
         BinaryNode right = (BinaryNode) tree.Right;
@@ -98,7 +98,7 @@ public class ParserTest
         string input = "null(1, 2, 3, 4, 5)";
         
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         CallNode tree = (CallNode) visitor.VisitExpr(parser.expr());
         
@@ -112,7 +112,7 @@ public class ParserTest
         string input = "f()";
         
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         CallNode tree = (CallNode) visitor.VisitExpr(parser.expr());
         Assert.AreEqual(0, tree.Arguments.Length);
@@ -128,7 +128,7 @@ public class ParserTest
             "}");
             
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         ProgramNode program = visitor.VisitProgram(parser.program());
         ClassNode tree = program.Classes[0];
@@ -150,7 +150,7 @@ public class ParserTest
         string input = "private main(a : float) -> int { 5 }";
 
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         MethodNode method = visitor.VisitMethod((EnlynParser.MethodContext) parser.member());
 
@@ -170,7 +170,7 @@ public class ParserTest
         string input = "private new() : base(true) = 1";
 
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         ConstructorNode constructor = visitor.VisitConstructor((EnlynParser.ConstructorContext) parser.member());
         
@@ -186,7 +186,7 @@ public class ParserTest
         string input = "public override binary +() -> int { true is boolean }";
 
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         MethodNode method = visitor.VisitMethod((EnlynParser.MethodContext) parser.member());
 
@@ -204,7 +204,7 @@ public class ParserTest
             "else w");
             
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         IfNode branch = visitor.VisitIf((EnlynParser.IfContext) parser.stmt());
         IfNode then = (IfNode) branch.Then;
@@ -225,7 +225,7 @@ public class ParserTest
             "else w");
             
         EnlynParser parser = InitParser(input);
-        ParseTreeVisitor visitor = new();
+        ParseTreeVisitor visitor = new("Test");
 
         IfNode branch = visitor.VisitIf((EnlynParser.IfContext) parser.stmt());
         IfNode then = (IfNode) ((BlockNode) branch.Then).Statements[0];

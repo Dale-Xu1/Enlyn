@@ -13,7 +13,7 @@ EnlynParser parser = new(tokens);
 parser.RemoveErrorListeners();
 parser.AddErrorListener(new ErrorListener(file));
 
-ParseTreeVisitor visitor = new();
+ParseTreeVisitor visitor = new(file);
 ProgramNode tree = visitor.VisitProgram(parser.program());
 
 class ErrorListener : BaseErrorListener

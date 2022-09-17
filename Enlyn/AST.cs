@@ -1,132 +1,146 @@
 namespace Enlyn;
 using Antlr4.Runtime;
-using Antlr4.Runtime.Tree;
+
+public record struct Location
+{
+    public string File { get; init; }
+
+    public int Line { get; init; }
+    public int Col { get; init; }
+}
 
 public interface INode { }
-public class ProgramNode : INode { public ClassNode[] Classes { get; set; } = null!; }
+public abstract record LocationNode { public Location Location { get; init; } }
 
-public class ClassNode : INode
+public record ProgramNode : INode { public ClassNode[] Classes { get; init; } = null!; }
+public record ClassNode : LocationNode, INode
 {
-    public TypeNode Identifier { get; set; } = null!;
-    public TypeNode? Parent { get; set; } = null;
+    public TypeNode Identifier { get; init; } = null!;
+    public TypeNode? Parent { get; init; } = null;
 
-    public MemberNode[] Members { get; set; } = null!;
+    public IMemberNode[] Members { get; init; } = null!;
 }
 
 public enum Access { Public, Protected, Private }
-public abstract class MemberNode : INode { public Access Access { get; set; } }
+public interface IMemberNode : INode { public Access Access { get; init; } }
 
-public class FieldNode : MemberNode
+public record FieldNode : LocationNode, IMemberNode
 {
-    public IdentifierNode Identifier { get; set; } = null!;
-    public ITypeNode Type { get; set; } = null!;
+    public Access Access { get; init; }
 
-    public IExpressionNode? Expression { get; set; } = null;
+    public IdentifierNode Identifier { get; init; } = null!;
+    public ITypeNode Type { get; init; } = null!;
+
+    public IExpressionNode? Expression { get; init; } = null;
 }
 
-public class MethodNode : MemberNode
+public record MethodNode : LocationNode, IMemberNode
 {
-    public bool Override { get; set; }
+    public Access Access { get; init; }
+    public bool Override { get; init; }
 
-    public IIdentifierNode Identifier { get; set; } = null!;
-    public ParameterNode[] Parameters { get; set; } = null!;
-    public ITypeNode? Return { get; set; } = null;
+    public IIdentifierNode Identifier { get; init; } = null!;
+    public ParameterNode[] Parameters { get; init; } = null!;
+    public ITypeNode? Return { get; init; } = null;
 
-    public IStatementNode Body { get; set; } = null!;
+    public IStatementNode Body { get; init; } = null!;
 }
 
-public class ConstructorNode : MemberNode
+public record ConstructorNode : LocationNode, IMemberNode
 {
-    public ParameterNode[] Parameters { get; set; } = null!;
-    public IExpressionNode[] Arguments { get; set; } = null!;
+    public Access Access { get; init; }
 
-    public IStatementNode Body { get; set; } = null!;
+    public ParameterNode[] Parameters { get; init; } = null!;
+    public IExpressionNode[] Arguments { get; init; } = null!;
+
+    public IStatementNode Body { get; init; } = null!;
 }
 
-public class ParameterNode : INode
+public record ParameterNode : LocationNode, INode
 {
-    public IIdentifierNode Identifier { get; set; } = null!;
-    public ITypeNode Type { get; set; } = null!;
+    public IIdentifierNode Identifier { get; init; } = null!;
+    public ITypeNode Type { get; init; } = null!;
 }
 
 
 public interface IStatementNode : INode { }
 
-public class LetNode : IStatementNode
+public record LetNode : LocationNode, IStatementNode
 {
-    public IdentifierNode Identifier { get; set; } = null!;
-    public ITypeNode? Type { get; set; } = null;
+    public IdentifierNode Identifier { get; init; } = null!;
+    public ITypeNode? Type { get; init; } = null;
 
-    public IExpressionNode Expression { get; set; } = null!;
+    public IExpressionNode Expression { get; init; } = null!;
 }
 
-public class IfNode : IStatementNode
+public record IfNode : LocationNode, IStatementNode
 {
-    public IExpressionNode Condition { get; set; } = null!;
+    public IExpressionNode Condition { get; init; } = null!;
 
-    public IStatementNode Then { get; set; } = null!;
-    public IStatementNode? Else { get; set; } = null;
+    public IStatementNode Then { get; init; } = null!;
+    public IStatementNode? Else { get; init; } = null;
 }
 
-public class WhileNode : IStatementNode
+public record WhileNode : LocationNode, IStatementNode
 {
-    public IExpressionNode Condition { get; set; } = null!;
-    public IStatementNode Body { get; set; } = null!;
+    public IExpressionNode Condition { get; init; } = null!;
+    public IStatementNode Body { get; init; } = null!;
+}
+    
+public record ReturnNode : LocationNode, IStatementNode
+{
+    public IExpressionNode? Expression { get; init; } = null;
 }
 
-public class ReturnNode : IStatementNode { public IExpressionNode? Expression { get; set; } = null; }
-
-public class BlockNode : IStatementNode { public IStatementNode[] Statements { get; set; } = null!; }
-public class ExpressionStatementNode : IStatementNode { public IExpressionNode Expression { get; set; } = null!; }
+public record BlockNode : IStatementNode { public IStatementNode[] Statements { get; init; } = null!; }
+public record ExpressionStatementNode : LocationNode, IStatementNode
+{
+    public IExpressionNode Expression { get; init; } = null!;
+}
 
 
 public interface ITypeNode : INode { }
 public interface IExpressionNode : INode { }
 public interface IIdentifierNode : INode { }
 
-public class OptionNode : ITypeNode { public ITypeNode Type { get; set; } = null!; }
-public class TypeNode : ITypeNode
-{
-    public string Value { get; set; } 
+public record OptionNode : ITypeNode { public ITypeNode Type { get; init; } = null!; }
+public record TypeNode : ITypeNode { public string Value { get; init; } = null!; }
 
-    public TypeNode(IToken token) => Value = token.Text;
+public record AccessNode : IExpressionNode
+{
+    public IExpressionNode Target { get; init; } = null!;
+    public IdentifierNode Identifier { get; init; } = null!;
 }
 
-public class AccessNode : IExpressionNode
+public record CallNode : IExpressionNode
 {
-    public IExpressionNode Target { get; set; } = null!;
-    public IdentifierNode Identifier { get; set; } = null!;
+    public IExpressionNode Target { get; init; } = null!;
+    public IExpressionNode[] Arguments { get; init; } = null!;
 }
 
-public class CallNode : IExpressionNode
+public record NewNode : IExpressionNode
 {
-    public IExpressionNode Target { get; set; } = null!;
-    public IExpressionNode[] Arguments { get; set; } = null!;
+    public TypeNode Type { get; init; } = null!;
+    public IExpressionNode[] Arguments { get; init; } = null!;
 }
 
-public class NewNode : IExpressionNode
+public record AssertNode : IExpressionNode { public IExpressionNode Expression { get; init; } = null!; }
+public record AssignNode : IExpressionNode
 {
-    public TypeNode Type { get; set; } = null!;
-    public IExpressionNode[] Arguments { get; set; } = null!;
+    public IExpressionNode Target { get; init; } = null!;
+    public IExpressionNode Expression { get; init; } = null!;
 }
 
-public class AssertNode : IExpressionNode { public IExpressionNode Expression { get; set; } = null!; }
-public class AssignNode : IExpressionNode
+public record InstanceNode : IExpressionNode
 {
-    public IExpressionNode Target { get; set; } = null!;
-    public IExpressionNode Expression { get; set; } = null!;
+    public IExpressionNode Expression { get; init; } = null!;
+    public ITypeNode Type { get; init; } = null!;
 }
 
-public class InstanceNode : IExpressionNode
+public record CastNode : IExpressionNode
 {
-    public IExpressionNode Expression { get; set; } = null!;
-    public ITypeNode Type { get; set; } = null!;
-}
-
-public class CastNode : IExpressionNode
-{
-    public IExpressionNode Expression { get; set; } = null!;
-    public ITypeNode Type { get; set; } = null!;
+    public IExpressionNode Expression { get; init; } = null!;
+    public ITypeNode Type { get; init; } = null!;
 }
 
 public enum Operation
@@ -137,36 +151,33 @@ public enum Operation
     Neg, Not
 }
 
-public class BinaryNode : IExpressionNode
+public record BinaryNode : IExpressionNode
 {
-    public Operation Operation { get; set; }
+    public Operation Operation { get; init; }
 
-    public IExpressionNode Left { get; set; } = null!;
-    public IExpressionNode Right { get; set; } = null!;
+    public IExpressionNode Left { get; init; } = null!;
+    public IExpressionNode Right { get; init; } = null!;
 }
 
-public class UnaryNode : IExpressionNode
+public record UnaryNode : IExpressionNode
 {
-    public Operation Operation { get; set; }
-    public IExpressionNode Expression { get; set; } = null!;
+    public Operation Operation { get; init; }
+    public IExpressionNode Expression { get; init; } = null!;
 }
 
-public abstract class LiteralNode<T> : IExpressionNode { public T Value { get; set; } = default!; }
-public class IdentifierNode : LiteralNode<string>, IIdentifierNode
-{
-    public IdentifierNode(IToken token) => Value = token.Text;
-}
+public abstract record LiteralNode<T> : IExpressionNode { public T Value { get; init; } = default!; }
+public record IdentifierNode : LiteralNode<string>, IIdentifierNode { }
 
-public class BinaryIdentifierNode : IIdentifierNode { public Operation Operation { get; set; } }
-public class UnaryIdentifierNode : IIdentifierNode { public Operation Operation { get; set; } }
+public record BinaryIdentifierNode : IIdentifierNode { public Operation Operation { get; init; } }
+public record UnaryIdentifierNode : IIdentifierNode { public Operation Operation { get; init; } }
 
-public class NumberNode : LiteralNode<double> { }
-public class StringNode : LiteralNode<string> { }
-public class BooleanNode : LiteralNode<bool> { }
+public record NumberNode : LiteralNode<double> { }
+public record StringNode : LiteralNode<string> { }
+public record BooleanNode : LiteralNode<bool> { }
 
-public class ThisNode : IExpressionNode { }
-public class BaseNode : IExpressionNode { }
-public class NullNode : IExpressionNode { }
+public record ThisNode : IExpressionNode { }
+public record BaseNode : IExpressionNode { }
+public record NullNode : IExpressionNode { }
 
 
 public abstract class ASTVisitor<T>
@@ -212,8 +223,24 @@ public abstract class ASTVisitor<T>
 
 }
 
-public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range information
+public class ParseTreeVisitor : EnlynBaseVisitor<INode>
 {
+
+    private readonly string file;
+
+    public ParseTreeVisitor(string file) => this.file = file;
+
+
+    private Location GetLocation(ParserRuleContext context)
+    {
+        IToken token = context.Start;
+        return new()
+        {
+            File = file,
+            Line = token.Line,
+            Col = token.Column
+        };
+    }
 
     private T[] VisitList<T>(ParserRuleContext[]? contexts) where T : INode
     {
@@ -234,10 +261,11 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
         IToken? parent = context.parent;
         return new()
         {
-            Identifier = new TypeNode(context.id),
-            Parent = parent is null ? null : new TypeNode(parent),
+            Identifier = new TypeNode { Value = context.id.Text },
+            Parent = parent is null ? null : new TypeNode { Value = parent.Text },
 
-            Members = VisitList<MemberNode>(context.memberList()?.member())
+            Members = VisitList<IMemberNode>(context.memberList()?.member()),
+            Location = GetLocation(context)
         };
     }
 
@@ -257,10 +285,11 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
         {
             Access = VisitAccess(context.visibility()),
 
-            Identifier = new IdentifierNode(context.id),
+            Identifier = new IdentifierNode { Value = context.id.Text },
             Type = VisitType(context.type()),
 
-            Expression = expression is null ? null : VisitExpr(expression)
+            Expression = expression is null ? null : VisitExpr(expression),
+            Location = GetLocation(context)
         };
     }
 
@@ -271,7 +300,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
 
         if (name.BINARY() is not null) identifier = new BinaryIdentifierNode { Operation = MapBinary(name.op) };
         else if (name.UNARY() is not null) identifier = new UnaryIdentifierNode { Operation = MapUnary(name.op) };
-        else identifier = new IdentifierNode(name.id);
+        else identifier = new IdentifierNode { Value = name.id.Text };
 
         EnlynParser.TypeContext? type = context.type();
         return new()
@@ -283,7 +312,8 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
             Parameters = VisitList<ParameterNode>(context.paramList()?.param()),
             Return = type is null ? null : VisitType(type),
 
-            Body = VisitBlockStmt(context.block(), context.stmt())
+            Body = VisitBlockStmt(context.block(), context.stmt()),
+            Location = GetLocation(context)
         };
     }
 
@@ -294,29 +324,33 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
         Arguments = VisitList<IExpressionNode>(context.exprList()?.expr()),
         Parameters = VisitList<ParameterNode>(context.paramList()?.param()),
 
-        Body = VisitBlockStmt(context.block(), context.stmt())
+        Body = VisitBlockStmt(context.block(), context.stmt()),
+            Location = GetLocation(context)
     };
 
     public override ParameterNode VisitParam(EnlynParser.ParamContext context) => new()
     {
-        Identifier = new IdentifierNode(context.id),
-        Type = VisitType(context.type())
+        Identifier = new IdentifierNode { Value = context.id.Text },
+        Type = VisitType(context.type()),
+
+        Location = GetLocation(context)
     };
 
 
     public IStatementNode VisitStmt(EnlynParser.StmtContext context) => (IStatementNode) Visit(context);
     private IStatementNode VisitBlockStmt(EnlynParser.BlockContext? a, EnlynParser.StmtContext? b) =>
-        (IStatementNode) Visit((IParseTree?) a ?? b);
+        (IStatementNode) Visit((ParserRuleContext?) a ?? b);
 
     public override LetNode VisitLet(EnlynParser.LetContext context)
     {
         EnlynParser.TypeContext? type = context.type();
         return new()
         {
-            Identifier = new IdentifierNode(context.id),
+            Identifier = new IdentifierNode { Value = context.id.Text },
             Type = type is null ? null : VisitType(type),
             
-            Expression = VisitExpr(context.expr())
+            Expression = VisitExpr(context.expr()),
+            Location = GetLocation(context)
         };
     }
 
@@ -328,27 +362,38 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
             Condition = VisitExpr(context.expr()),
 
             Then = VisitBlockStmt(context.block(), context.stmt()),
-            Else = elseBranch is null ? null : VisitBlockStmt(elseBranch.block(), elseBranch.stmt())
+            Else = elseBranch is null ? null : VisitBlockStmt(elseBranch.block(), elseBranch.stmt()),
+
+            Location = GetLocation(context)
         };
     }
 
     public override WhileNode VisitWhile(EnlynParser.WhileContext context) => new()
     {
         Condition = VisitExpr(context.expr()),
-        Body = VisitBlockStmt(context.block(), context.stmt())
+        Body = VisitBlockStmt(context.block(), context.stmt()),
+
+        Location = GetLocation(context)
     };
 
     public override ReturnNode VisitReturn(EnlynParser.ReturnContext context)
     {
         EnlynParser.ExprContext? expression = context.expr();
-        return new() { Expression = expression is null ? null : VisitExpr(expression) };
+        return new()
+        {
+            Expression = expression is null ? null : VisitExpr(expression),
+            Location = GetLocation(context)
+        };
     }
 
     public override BlockNode VisitBlock(EnlynParser.BlockContext context) =>
         new() { Statements = VisitList<IStatementNode>(context.stmtList()?.stmt()) };
 
-    public override ExpressionStatementNode VisitExprStmt(EnlynParser.ExprStmtContext context) =>
-        new() { Expression = VisitExpr(context.expr()) };
+    public override ExpressionStatementNode VisitExprStmt(EnlynParser.ExprStmtContext context) => new()
+    {
+        Expression = VisitExpr(context.expr()),
+        Location = GetLocation(context)
+    };
 
 
     public IExpressionNode VisitExpr(EnlynParser.ExprContext context) => (IExpressionNode) Visit(context);
@@ -357,12 +402,13 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
     public override OptionNode VisitOption(EnlynParser.OptionContext context) =>
         new() { Type = VisitType(context.type()) };
 
-    public override TypeNode VisitTypeIdentifier(EnlynParser.TypeIdentifierContext context) => new(context.value);
+    public override TypeNode VisitTypeIdentifier(EnlynParser.TypeIdentifierContext context) =>
+        new() { Value = context.value.Text };
 
     public override AccessNode VisitAccess(EnlynParser.AccessContext context) => new()
     {
         Target = VisitExpr(context.expr()),
-        Identifier = new IdentifierNode(context.id)
+        Identifier = new IdentifierNode { Value = context.id.Text }
     };
 
     public override CallNode VisitCall(EnlynParser.CallContext context) => new()
@@ -373,7 +419,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
 
     public override NewNode VisitNew(EnlynParser.NewContext context) => new()
     {
-        Type = new TypeNode(context.id),
+        Type = new TypeNode { Value = context.id.Text },
         Arguments = VisitList<IExpressionNode>(context.exprList()?.expr())
     };
 
@@ -442,7 +488,9 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode> // TODO: Extract range i
         _ => throw new Exception("Invalid unary operation")
     };
 
-    public override IdentifierNode VisitIdentifier(EnlynParser.IdentifierContext context) => new(context.value);
+    public override IdentifierNode VisitIdentifier(EnlynParser.IdentifierContext context) =>
+        new() { Value = context.value.Text };
+
     public override NumberNode VisitNumber(EnlynParser.NumberContext context) =>
         new() { Value = double.Parse(context.value.Text) };
 
