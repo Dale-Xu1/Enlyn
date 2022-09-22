@@ -10,31 +10,14 @@ EnlynLexerFilter lexer = new(stream);
 CommonTokenStream tokens = new(lexer);
 EnlynParser parser = new(tokens);
 
+ErrorLogger error = new();
 parser.RemoveErrorListeners();
-parser.AddErrorListener(new ErrorListener(file));
+parser.AddErrorListener(new ErrorListener(error, file));
 
 ParseTreeVisitor visitor = new(file);
 ProgramNode tree = visitor.VisitProgram(parser.program());
 
-class ErrorListener : BaseErrorListener
-{
+TypeChecker checker = new(error);
+checker.Visit(tree);
 
-    private readonly string file;
-
-    public ErrorListener(string file) => this.file = file;
-
-
-    public override void SyntaxError(
-        TextWriter output, IRecognizer recognizer,
-        IToken token, int line, int col, string msg,
-        RecognitionException e)
-    {
-        using StreamReader reader = new(file);
-        for (int i = 1; i < line; i++) reader.ReadLine();
-
-        string name = Path.GetFileName(file);
-        Console.Error.WriteLine($"{name}:{line}:{col} - Syntax Error: Unexpected '{token.Text}'");
-        Console.Error.WriteLine($"{line} | {reader.ReadLine()}\n");
-    }
-
-}
+error.LogErrors();

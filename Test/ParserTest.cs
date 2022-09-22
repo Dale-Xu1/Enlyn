@@ -2,6 +2,8 @@ namespace Test;
 using Antlr4.Runtime;
 using Enlyn;
 
+using Environment = System.Environment;
+
 [TestClass]
 public class ParserTest
 {
@@ -79,17 +81,13 @@ public class ParserTest
 
         BinaryNode tree = (BinaryNode) visitor.VisitExpr(parser.expr());
         BinaryNode right = (BinaryNode) tree.Right;
-        
+
         Assert.AreEqual(Operation.Mul, tree.Operation);
         Assert.AreEqual(Operation.Add, right.Operation);
 
-        BooleanNode a = (BooleanNode) tree.Left;
-        StringNode b = (StringNode) right.Left;
-        NumberNode c = (NumberNode) right.Right;
-
-        Assert.AreEqual(false, a.Value);
-        Assert.AreEqual("Hello\n", b.Value);
-        Assert.AreEqual(0.2e-3, c.Value);
+        Assert.AreEqual(false, ((BooleanNode) tree.Left).Value);
+        Assert.AreEqual("Hello\n", ((StringNode) right.Left).Value);
+        Assert.AreEqual(0.2e-3, ((NumberNode) right.Right).Value);
     }
 
     [TestMethod]
@@ -132,7 +130,7 @@ public class ParserTest
 
         ProgramNode program = visitor.VisitProgram(parser.program());
         ClassNode tree = program.Classes[0];
-        
+
         Assert.AreEqual(1, program.Classes.Length);
         Assert.AreEqual("Main", tree.Identifier.Value);
         Assert.AreEqual("object", tree.Parent?.Value);
@@ -158,7 +156,7 @@ public class ParserTest
         Assert.AreEqual(1, method.Parameters.Length);
         ParameterNode parameter = method.Parameters[0];
 
-        Assert.AreEqual("a", ((IdentifierNode) parameter.Identifier).Value);
+        Assert.AreEqual("a", parameter.Identifier.Value);
         Assert.AreEqual("float", ((TypeNode) parameter.Type).Value);
 
         Assert.AreEqual("int", ((TypeNode) method.Return!).Value);
@@ -195,7 +193,7 @@ public class ParserTest
         
         Assert.AreEqual(Operation.Add, ((BinaryIdentifierNode) method.Identifier).Operation);
     }
-    
+
     [TestMethod]
     public void TestIfPrecedence()
     {

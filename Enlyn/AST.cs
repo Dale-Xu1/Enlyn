@@ -1,7 +1,7 @@
 namespace Enlyn;
 using Antlr4.Runtime;
 
-public record struct Location
+public struct Location
 {
     public string File { get; init; }
 
@@ -10,13 +10,13 @@ public record struct Location
 }
 
 public interface INode { }
-public abstract record LocationNode { public Location Location { get; init; } }
+public abstract class LocationNode { public Location Location { get; init; } }
 
-public record ProgramNode : INode { public ClassNode[] Classes { get; init; } = null!; }
-public record ClassNode : LocationNode, INode
+public class ProgramNode : INode { public ClassNode[] Classes { get; init; } = null!; }
+public class ClassNode : LocationNode, INode
 {
-    public TypeNode Identifier { get; init; } = null!;
-    public TypeNode? Parent { get; init; } = null;
+    public TypeNode Identifier { get; init; }
+    public TypeNode? Parent { get; init; }
 
     public IMemberNode[] Members { get; init; } = null!;
 }
@@ -24,29 +24,29 @@ public record ClassNode : LocationNode, INode
 public enum Access { Public, Protected, Private }
 public interface IMemberNode : INode { public Access Access { get; init; } }
 
-public record FieldNode : LocationNode, IMemberNode
+public class FieldNode : LocationNode, IMemberNode
 {
     public Access Access { get; init; }
 
-    public IdentifierNode Identifier { get; init; } = null!;
+    public IdentifierNode Identifier { get; init; }
     public ITypeNode Type { get; init; } = null!;
 
-    public IExpressionNode? Expression { get; init; } = null;
+    public IExpressionNode? Expression { get; init; }
 }
 
-public record MethodNode : LocationNode, IMemberNode
+public class MethodNode : LocationNode, IMemberNode
 {
     public Access Access { get; init; }
     public bool Override { get; init; }
 
     public IIdentifierNode Identifier { get; init; } = null!;
     public ParameterNode[] Parameters { get; init; } = null!;
-    public ITypeNode? Return { get; init; } = null;
+    public ITypeNode? Return { get; init; }
 
     public IStatementNode Body { get; init; } = null!;
 }
 
-public record ConstructorNode : LocationNode, IMemberNode
+public class ConstructorNode : LocationNode, IMemberNode
 {
     public Access Access { get; init; }
 
@@ -56,44 +56,41 @@ public record ConstructorNode : LocationNode, IMemberNode
     public IStatementNode Body { get; init; } = null!;
 }
 
-public record ParameterNode : LocationNode, INode
+public class ParameterNode : LocationNode, INode
 {
-    public IIdentifierNode Identifier { get; init; } = null!;
+    public IdentifierNode Identifier { get; init; }
     public ITypeNode Type { get; init; } = null!;
 }
 
 
 public interface IStatementNode : INode { }
 
-public record LetNode : LocationNode, IStatementNode
+public class LetNode : LocationNode, IStatementNode
 {
-    public IdentifierNode Identifier { get; init; } = null!;
-    public ITypeNode? Type { get; init; } = null;
+    public IdentifierNode Identifier { get; init; }
+    public ITypeNode? Type { get; init; }
 
     public IExpressionNode Expression { get; init; } = null!;
 }
 
-public record IfNode : LocationNode, IStatementNode
+public class IfNode : LocationNode, IStatementNode
 {
     public IExpressionNode Condition { get; init; } = null!;
 
     public IStatementNode Then { get; init; } = null!;
-    public IStatementNode? Else { get; init; } = null;
+    public IStatementNode? Else { get; init; }
 }
 
-public record WhileNode : LocationNode, IStatementNode
+public class WhileNode : LocationNode, IStatementNode
 {
     public IExpressionNode Condition { get; init; } = null!;
     public IStatementNode Body { get; init; } = null!;
 }
-    
-public record ReturnNode : LocationNode, IStatementNode
-{
-    public IExpressionNode? Expression { get; init; } = null;
-}
 
-public record BlockNode : IStatementNode { public IStatementNode[] Statements { get; init; } = null!; }
-public record ExpressionStatementNode : LocationNode, IStatementNode
+public class ReturnNode : LocationNode, IStatementNode { public IExpressionNode? Expression { get; init; } }
+
+public class BlockNode : IStatementNode { public IStatementNode[] Statements { get; init; } = null!; }
+public class ExpressionStatementNode : LocationNode, IStatementNode
 {
     public IExpressionNode Expression { get; init; } = null!;
 }
@@ -103,41 +100,41 @@ public interface ITypeNode : INode { }
 public interface IExpressionNode : INode { }
 public interface IIdentifierNode : INode { }
 
-public record OptionNode : ITypeNode { public ITypeNode Type { get; init; } = null!; }
-public record TypeNode : ITypeNode { public string Value { get; init; } = null!; }
+public class OptionNode : ITypeNode { public ITypeNode Type { get; init; } = null!; }
+public record struct TypeNode : ITypeNode { public string Value { get; init; } }
 
-public record AccessNode : IExpressionNode
+public class AccessNode : IExpressionNode
 {
     public IExpressionNode Target { get; init; } = null!;
-    public IdentifierNode Identifier { get; init; } = null!;
+    public IdentifierNode Identifier { get; init; }
 }
 
-public record CallNode : IExpressionNode
+public class CallNode : IExpressionNode
 {
     public IExpressionNode Target { get; init; } = null!;
     public IExpressionNode[] Arguments { get; init; } = null!;
 }
 
-public record NewNode : IExpressionNode
+public class NewNode : IExpressionNode
 {
-    public TypeNode Type { get; init; } = null!;
+    public TypeNode Type { get; init; }
     public IExpressionNode[] Arguments { get; init; } = null!;
 }
 
-public record AssertNode : IExpressionNode { public IExpressionNode Expression { get; init; } = null!; }
-public record AssignNode : IExpressionNode
+public class AssertNode : IExpressionNode { public IExpressionNode Expression { get; init; } = null!; }
+public class AssignNode : IExpressionNode
 {
     public IExpressionNode Target { get; init; } = null!;
     public IExpressionNode Expression { get; init; } = null!;
 }
 
-public record InstanceNode : IExpressionNode
+public class InstanceNode : IExpressionNode
 {
     public IExpressionNode Expression { get; init; } = null!;
     public ITypeNode Type { get; init; } = null!;
 }
 
-public record CastNode : IExpressionNode
+public class CastNode : IExpressionNode
 {
     public IExpressionNode Expression { get; init; } = null!;
     public ITypeNode Type { get; init; } = null!;
@@ -151,7 +148,7 @@ public enum Operation
     Neg, Not
 }
 
-public record BinaryNode : IExpressionNode
+public class BinaryNode : IExpressionNode
 {
     public Operation Operation { get; init; }
 
@@ -159,25 +156,24 @@ public record BinaryNode : IExpressionNode
     public IExpressionNode Right { get; init; } = null!;
 }
 
-public record UnaryNode : IExpressionNode
+public class UnaryNode : IExpressionNode
 {
     public Operation Operation { get; init; }
     public IExpressionNode Expression { get; init; } = null!;
 }
 
-public abstract record LiteralNode<T> : IExpressionNode { public T Value { get; init; } = default!; }
-public record IdentifierNode : LiteralNode<string>, IIdentifierNode { }
+public record struct IdentifierNode : IIdentifierNode, IExpressionNode { public string Value { get; init; } }
 
-public record BinaryIdentifierNode : IIdentifierNode { public Operation Operation { get; init; } }
-public record UnaryIdentifierNode : IIdentifierNode { public Operation Operation { get; init; } }
+public struct BinaryIdentifierNode : IIdentifierNode { public Operation Operation { get; init; } }
+public struct UnaryIdentifierNode : IIdentifierNode { public Operation Operation { get; init; } }
 
-public record NumberNode : LiteralNode<double> { }
-public record StringNode : LiteralNode<string> { }
-public record BooleanNode : LiteralNode<bool> { }
+public struct NumberNode : IExpressionNode { public double Value { get; init; } }
+public struct StringNode : IExpressionNode { public string Value { get; init; } }
+public struct BooleanNode : IExpressionNode { public bool Value { get; init; } }
 
-public record ThisNode : IExpressionNode { }
-public record BaseNode : IExpressionNode { }
-public record NullNode : IExpressionNode { }
+public struct ThisNode : IExpressionNode { }
+public struct BaseNode : IExpressionNode { }
+public struct NullNode : IExpressionNode { }
 
 
 public abstract class ASTVisitor<T>
@@ -296,11 +292,10 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
     public override MethodNode VisitMethod(EnlynParser.MethodContext context)
     {
         EnlynParser.MethodNameContext name = context.methodName();
-        IIdentifierNode identifier;
-
-        if (name.BINARY() is not null) identifier = new BinaryIdentifierNode { Operation = MapBinary(name.op) };
-        else if (name.UNARY() is not null) identifier = new UnaryIdentifierNode { Operation = MapUnary(name.op) };
-        else identifier = new IdentifierNode { Value = name.id.Text };
+        IIdentifierNode identifier =
+            name.BINARY() is not null ? new BinaryIdentifierNode { Operation = MapBinary(name.op) } :
+            name.UNARY() is not null ? new UnaryIdentifierNode { Operation = MapUnary(name.op) } :
+            new IdentifierNode { Value = name.id.Text };
 
         EnlynParser.TypeContext? type = context.type();
         return new()
@@ -402,8 +397,8 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
     public override OptionNode VisitOption(EnlynParser.OptionContext context) =>
         new() { Type = VisitType(context.type()) };
 
-    public override TypeNode VisitTypeIdentifier(EnlynParser.TypeIdentifierContext context) =>
-        new() { Value = context.value.Text };
+    public override ITypeNode VisitTypeIdentifier(EnlynParser.TypeIdentifierContext context) =>
+        new TypeNode { Value = context.value.Text };
 
     public override AccessNode VisitAccess(EnlynParser.AccessContext context) => new()
     {
@@ -488,13 +483,13 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         _ => throw new Exception("Invalid unary operation")
     };
 
-    public override IdentifierNode VisitIdentifier(EnlynParser.IdentifierContext context) =>
-        new() { Value = context.value.Text };
+    public override IExpressionNode VisitIdentifier(EnlynParser.IdentifierContext context) =>
+        new IdentifierNode { Value = context.value.Text };
 
-    public override NumberNode VisitNumber(EnlynParser.NumberContext context) =>
-        new() { Value = double.Parse(context.value.Text) };
+    public override IExpressionNode VisitNumber(EnlynParser.NumberContext context) =>
+        new NumberNode { Value = double.Parse(context.value.Text) };
 
-    public override StringNode VisitString(EnlynParser.StringContext context)
+    public override IExpressionNode VisitString(EnlynParser.StringContext context)
     {
         string text = context.value.Text;
         text = text.Substring(1, text.Length - 2)
@@ -509,11 +504,11 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         return new StringNode { Value = text };
     }
 
-    public override BooleanNode VisitBoolean(EnlynParser.BooleanContext context) =>
-        new() { Value = bool.Parse(context.value.Text) };
+    public override IExpressionNode VisitBoolean(EnlynParser.BooleanContext context) =>
+        new BooleanNode { Value = bool.Parse(context.value.Text) };
 
-    public override ThisNode VisitThis(EnlynParser.ThisContext _) => new();
-    public override BaseNode VisitBase(EnlynParser.BaseContext _) => new();
-    public override NullNode VisitNull(EnlynParser.NullContext _) => new();
+    public override IExpressionNode VisitThis(EnlynParser.ThisContext _) => new ThisNode();
+    public override IExpressionNode VisitBase(EnlynParser.BaseContext _) => new BaseNode();
+    public override IExpressionNode VisitNull(EnlynParser.NullContext _) => new NullNode();
 
 }
