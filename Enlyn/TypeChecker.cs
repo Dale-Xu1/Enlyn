@@ -3,23 +3,22 @@ namespace Enlyn;
 public class Map<K, V> : Dictionary<K, V> where K : notnull
 {
 
-    public Map(Dictionary<K, V> map) : base(map) { }
+    public Map(Map<K, V> map) : base(map) { }
     public Map() { }
 
 
-    public new IResult<V> this[K key]
+    public new V this[K key]
     {
         get
         {
-            if (ContainsKey(key)) return Result.Ok<V>(base[key]);
-            return Result.Error<V>($"{key} not found");
+            if (ContainsKey(key)) return base[key];
+            throw new EnlynError($"{key} not found");
         }
-    }
-
-    public new IResult<unit> Add(K key, V value)
-    {
-        if (TryAdd(key, value)) return Result.Unit;
-        else return Result.Error($"Redefinition of {key}");
+        set
+        {
+            if (ContainsKey(key)) throw new EnlynError($"Redefinition of {key}");
+            base[key] = value;
+        }
     }
 
 }
@@ -78,10 +77,10 @@ internal static class StandardLibrary
     public static readonly Type unit = new("unit");
     public static readonly Type any = new("any")
     {
-        Methods = new(new Dictionary<IIdentifierNode, Method>
+        Methods = new()
         {
 
-        })
+        }
     };
 
     public static readonly IdentifierNode current = new() { Value = "this" };
@@ -89,11 +88,11 @@ internal static class StandardLibrary
     public static readonly IdentifierNode method = new() { Value = "return" };
 
 
-    public static readonly Map<TypeNode, Type> classes = new(new Dictionary<TypeNode, Type>
+    public static readonly Map<TypeNode, Type> classes = new()
     {
         [unit.Name] = unit,
         [any.Name ] = any
-    });
+    };
 
 }
 
@@ -115,22 +114,28 @@ public class TypeChecker : ASTVisitor<object?>
         foreach (ClassNode node in program.Classes)
         {
             Type type = new() { Name = node.Identifier };
-            if (Environment.Classes.Add(node.Identifier, type).Unwrap(error, node.Location) is not null)
+            error.Catch(node.Location, () =>
+            {
+                Environment.Classes[node.Identifier] = type;
                 nodes.Add(new ClassData(node, type));
+            });
         }
 
+        // Initialize parent graph and check for cycles
         foreach ((ClassNode node, Type type) in nodes)
         {
             if (node.Parent is not TypeNode name) continue;
-
-            Type? parent = Environment.Classes[name].Unwrap(error, node.Location);
-            if (parent is not null) type.Parent = parent;
+            error.Catch(node.Location, () =>
+            {
+                Type parent = Environment.Classes[name];
+                type.Parent = parent;
+            });
         }
-
         CheckCycles(program.Classes, from data in nodes select data.type);
+
+        // Initialize and check members
         foreach ((ClassNode node, Type type) in nodes) foreach (IMemberNode member in node.Members)
             InitializeMember(type, (dynamic) member);
-
         foreach ((ClassNode node, Type type) in nodes)
         {
             Environment.Enter();
@@ -167,77 +172,58 @@ public class TypeChecker : ASTVisitor<object?>
         }
     }
 
-    private void InitializeMember(Type type, FieldNode node)
-    {
-        IType? field = new TypeVisitor(Environment).Visit(node.Type).Unwrap(error, node.Location);
-        if (field is null) return;
-
+    private void InitializeMember(Type type, FieldNode node) => error.Catch(node.Location, () =>
         type.Fields.Add(node.Identifier, new Field
         {
             Access = node.Access,
-            Type = field
-        });
-    }
+            Type = new TypeVisitor(Environment).Visit(node.Type)
+        }));
 
-    private void InitializeMember(Type type, MethodNode node)
+    private void InitializeMember(Type type, MethodNode node) => error.Catch(node.Location, () =>
     {
-        // Get types
-        IType? returnType = node.Return switch  
+        // Get return and parameter types
+        IType returnType = node.Return switch  
         {
-            ITypeNode t => new TypeVisitor(Environment).Visit(t).Unwrap(error, node.Location),
+            ITypeNode typeNode => new TypeVisitor(Environment).Visit(typeNode),
             null => StandardLibrary.unit // Defaults to unit if type is unspecified
         };
-        IType[]? parameters = InitializeParameters(node.Parameters);
 
-        if (returnType is null || parameters is null) return;
-        if (CheckOperator(node) is null) return;
-
-        type.Methods.Add(node.Identifier, new Method
+        // Check operator cases
+        int length = node.Parameters.Length;
+        IIdentifierNode identifier = node.Identifier switch
         {
-            Access = node.Access,
-            Parameters = parameters,
-            Return = returnType
-        });
-    }
+            BinaryIdentifierNode when length != 1 =>
+                throw new EnlynError("Binary operation must be defined with 1 parameter"),
+            UnaryIdentifierNode when length != 0 =>
+                throw new EnlynError("Unary operation cannot be defined with parameter"),
 
-    private object? CheckOperator(MethodNode node)
-    {
-        int l = node.Parameters.Length;
-        IResult<unit> result = node.Identifier switch
-        {
-            BinaryIdentifierNode => l == 1 ? Result.Unit :
-                Result.Error("Binary operation must be defined with 1 parameter"),
-            UnaryIdentifierNode => l == 0 ? Result.Unit :
-                Result.Error("Unary operation cannot be defined with parameter"),
-            _ => Result.Unit
+            IIdentifierNode node => node
         };
 
-        return result.Unwrap(error, node.Location);
-    }
+        type.Methods.Add(identifier, new Method
+        {
+            Access = node.Access,
+            Parameters = InitializeParameters(node.Parameters),
+            Return = returnType
+        });
+    });
 
-    private void InitializeMember(Type type, ConstructorNode node)
-    {
-        IType[]? parameters = InitializeParameters(node.Parameters);
-        if (parameters is null) return;
-
+    private void InitializeMember(Type type, ConstructorNode node) => error.Catch(node.Location, () =>
         type.Methods.Add(StandardLibrary.constructor, new Method
         {
             Access = node.Access,
-            Parameters = parameters,
+            Parameters = InitializeParameters(node.Parameters),
             Return = StandardLibrary.unit
-        });
-    }
+        }));
 
-    private IType[]? InitializeParameters(ParameterNode[] parameters)
+    private IType[] InitializeParameters(ParameterNode[] parameters)
     {
         TypeVisitor visitor = new TypeVisitor(Environment);
-        IEnumerable<IType?> types =
+        IEnumerable<IType> types =
             from parameter in parameters
-            select visitor.Visit(parameter.Type).Unwrap(error, parameter.Location);
+            select visitor.Visit(parameter.Type);
 
-        // Fail the entire list if any parameter fails
-        foreach (IType? parameter in types) if (parameter is null) return null;
-        return types.ToArray()!;
+        return types.ToArray();
     }
 
     public override object? Visit(FieldNode node)
@@ -257,7 +243,7 @@ public class TypeChecker : ASTVisitor<object?>
 
 }
 
-internal class TypeVisitor : ASTVisitor<IResult<IType>>
+internal class TypeVisitor : ASTVisitor<IType>
 {
 
     private readonly Environment environment;
@@ -265,16 +251,7 @@ internal class TypeVisitor : ASTVisitor<IResult<IType>>
     public TypeVisitor(Environment environment) => this.environment = environment;
 
 
-    public override IResult<IType> Visit(TypeNode node) => environment.Classes[node].Cast<IType>();
-    public override IResult<IType> Visit(OptionNode node)
-    {
-        return Visit(node.Type) switch
-        {
-            Ok<IType>(IType type) => Result.Ok<IType>(new Option { Type = type }),
-            Error<IType> error => error,
-
-            _ => throw new Exception()
-        };
-    }
+    public override IType Visit(TypeNode node) => environment.Classes[node];
+    public override IType Visit(OptionNode node) => new Option { Type = Visit(node.Type) };
 
 }

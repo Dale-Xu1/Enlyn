@@ -56,7 +56,7 @@ public class ConstructorNode : LocationNode, IMemberNode
     public IStatementNode Body { get; init; } = null!;
 }
 
-public class ParameterNode : LocationNode, INode
+public class ParameterNode : INode
 {
     public IdentifierNode Identifier { get; init; }
     public ITypeNode Type { get; init; } = null!;
@@ -363,9 +363,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
     public override ParameterNode VisitParam(EnlynParser.ParamContext context) => new()
     {
         Identifier = new IdentifierNode { Value = context.id.Text },
-        Type = VisitType(context.type()),
-
-        Location = GetLocation(context)
+        Type = VisitType(context.type())
     };
 
 

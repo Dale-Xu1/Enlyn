@@ -73,10 +73,10 @@ public class TypeCheckerTest
         checker.Visit(ParseProgram(input));
         Enlyn.Environment environment = checker.Environment;
 
-        Type type = environment.Classes[new TypeNode { Value = "A" }].Unwrap();
-        Field field = type.Fields[new IdentifierNode { Value = "x" }].Unwrap();
+        Type type = environment.Classes[new TypeNode { Value = "A" }];
+        Field field = type.Fields[new IdentifierNode { Value = "x" }];
 
-        Type any = environment.Classes[new TypeNode { Value = "any" }].Unwrap();
+        Type any = environment.Classes[new TypeNode { Value = "any" }];
         Assert.AreEqual(Access.Public, field.Access);
         Assert.AreEqual(any, field.Type);
     }
@@ -96,12 +96,12 @@ public class TypeCheckerTest
 
         checker.Visit(ParseProgram(input));
         Enlyn.Environment environment = checker.Environment;
-        
-        Type a = environment.Classes[new TypeNode { Value = "A" }].Unwrap();
-        Type b = environment.Classes[new TypeNode { Value = "B" }].Unwrap();
-        Type unit = environment.Classes[new TypeNode { Value = "unit" }].Unwrap();
 
-        Method main = a.Methods[new IdentifierNode { Value = "main" }].Unwrap();
+        Type a = environment.Classes[new TypeNode { Value = "A" }];
+        Type b = environment.Classes[new TypeNode { Value = "B" }];
+        Type unit = environment.Classes[new TypeNode { Value = "unit" }];
+
+        Method main = a.Methods[new IdentifierNode { Value = "main" }];
 
         Assert.AreEqual(Access.Private, main.Access);
         Assert.AreEqual(unit, main.Return);
