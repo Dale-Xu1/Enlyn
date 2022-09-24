@@ -1,2 +1,4 @@
-class Main { }
-class Main { }
+class A : unitt { }
+class B : A { }
+class C : B { }
+class D : A { }

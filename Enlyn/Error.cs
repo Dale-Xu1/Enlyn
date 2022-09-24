@@ -34,7 +34,7 @@ public class ErrorLogger
 
 }
 
-public class ErrorListener : BaseErrorListener
+internal class ErrorListener : BaseErrorListener
 {
 
     private readonly ErrorLogger error;
@@ -61,19 +61,51 @@ public class ErrorListener : BaseErrorListener
 
 }
 
-internal interface IResult<T> { }
-internal static class Result
+public interface IResult<T>
+{
+
+    public T Ignore()
+    {
+        Result.Ok<T> result = (Result.Ok<T>) this;
+        return result.Value;
+    }
+
+    public T? Handle(ErrorLogger error, Location location)
+    {
+        switch (this)
+        {
+            case Result.Ok<T>(T value): return value;
+            case Result.Error<T>(string message):
+                error.Report(message, location);
+                break;
+        }
+
+        return default;
+    }
+
+}
+
+public static class Result
 {
 
     public struct Ok<T> : IResult<T>
     {
 
         public T Value { get; }
-
         public Ok(T value) => Value = value;
+
+        public void Deconstruct(out T value) => value = Value;
 
     }
 
-    public struct Error<T> : IResult<T> { }
+    public struct Error<T> : IResult<T>
+    {
+
+        public string Message { get; }
+        public Error(string message) => Message = message;
+
+        public void Deconstruct(out string message) => message = Message;
+
+    }
 
 }
