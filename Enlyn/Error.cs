@@ -64,48 +64,60 @@ internal class ErrorListener : BaseErrorListener
 public interface IResult<T>
 {
 
-    public T Ignore()
+    public T Unwrap() => this switch
     {
-        Result.Ok<T> result = (Result.Ok<T>) this;
-        return result.Value;
-    }
+        Ok<T>(T value) => value,
+        _ => throw new Exception("Cannot unwrap error result")
+    };
 
-    public T? Handle(ErrorLogger error, Location location)
+    public T? Unwrap(ErrorLogger error, Location location)
     {
-        switch (this)
+        T? Report(string message) { error.Report(message, location); return default; }
+        return this switch
         {
-            case Result.Ok<T>(T value): return value;
-            case Result.Error<T>(string message):
-                error.Report(message, location);
-                break;
-        }
+            Ok<T>(T value) => value,
+            Error<T>(string message) => Report(message),
 
-        return default;
+            _ => throw new Exception()
+        };
     }
+
+    // TODO: Bind
+
+    public IResult<U> Cast<U>() => this switch
+    {
+        Ok<T>(T value) => Result.Ok<U>((dynamic) value),
+        Error<T>(string message) => Result.Error<U>(message),
+        
+        _ => throw new Exception()
+    };
 
 }
 
+public struct Ok<T> : IResult<T>
+{
+
+    public T Value { get; init; }
+    public void Deconstruct(out T value) => value = Value;
+
+}
+
+public struct Error<T> : IResult<T>
+{
+
+    public string Message { get; init; }
+    public void Deconstruct(out string message) => message = Message;
+
+}
+
+public class unit { }
 public static class Result
 {
 
-    public struct Ok<T> : IResult<T>
-    {
+    internal static Ok<T> Ok<T>(T value) => new Ok<T> { Value = value };
+    internal static Ok<unit> Unit { get; } = Ok<unit>(new());
 
-        public T Value { get; }
-        public Ok(T value) => Value = value;
-
-        public void Deconstruct(out T value) => value = Value;
-
-    }
-
-    public struct Error<T> : IResult<T>
-    {
-
-        public string Message { get; }
-        public Error(string message) => Message = message;
-
-        public void Deconstruct(out string message) => message = Message;
-
-    }
+    internal static Error<T> Error<T>(string message) => new Error<T> { Message = message };
+    internal static Error<unit> Error(string message) => Error<unit>(message);
 
 }

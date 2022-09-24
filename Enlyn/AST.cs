@@ -101,7 +101,11 @@ public interface IExpressionNode : INode { }
 public interface IIdentifierNode : INode { }
 
 public class OptionNode : ITypeNode { public ITypeNode Type { get; init; } = null!; }
-public record struct TypeNode : ITypeNode { public string Value { get; init; } }
+public record struct TypeNode : ITypeNode
+{
+    public string Value { get; init; }
+    public override string ToString() => Value;
+}
 
 public class AccessNode : IExpressionNode
 {
@@ -162,10 +166,43 @@ public class UnaryNode : IExpressionNode
     public IExpressionNode Expression { get; init; } = null!;
 }
 
-public record struct IdentifierNode : IIdentifierNode, IExpressionNode { public string Value { get; init; } }
+public record struct IdentifierNode : IIdentifierNode, IExpressionNode
+{
+    public string Value { get; init; }
+    public override string ToString() => Value;
+}
 
-public struct BinaryIdentifierNode : IIdentifierNode { public Operation Operation { get; init; } }
-public struct UnaryIdentifierNode : IIdentifierNode { public Operation Operation { get; init; } }
+public struct BinaryIdentifierNode : IIdentifierNode
+{
+    public Operation Operation { get; init; }
+
+    public override string ToString() => Operation switch
+    {
+        Operation.Add => "+", Operation.Sub => "-",
+        Operation.Mul => "*", Operation.Div => "/", Operation.Mod => "%",
+
+        Operation.And => "&", Operation.Or => "|",
+        
+        Operation.Eq => "==", Operation.Neq => "!=",
+        Operation.Lt => "<", Operation.Gt => ">",
+        Operation.Le => "<=", Operation.Ge => ">=",
+
+        _ => throw new Exception()
+    };
+}
+
+public struct UnaryIdentifierNode : IIdentifierNode
+{
+    public Operation Operation { get; init; }
+    
+    public override string ToString() => Operation switch
+    {
+        Operation.Neg => "-",
+        Operation.Not => "!",
+
+        _ => throw new Exception()
+    };
+}
 
 public struct NumberNode : IExpressionNode { public double Value { get; init; } }
 public struct StringNode : IExpressionNode { public string Value { get; init; } }
@@ -271,7 +308,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         EnlynParser.PROTECTED => Access.Protected,
         EnlynParser.PRIVATE => Access.Private,
 
-        _ => throw new Exception("Invalid access modifier")
+        _ => throw new Exception()
     };
 
     public override FieldNode VisitField(EnlynParser.FieldContext context)
@@ -456,23 +493,17 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
 
     private Operation MapBinary(IToken token) => token.Type switch // Convert token to operation enum
     {
-        EnlynLexer.PLUS    => Operation.Add,
-        EnlynLexer.MINUS   => Operation.Sub,
-        EnlynLexer.STAR    => Operation.Mul,
-        EnlynLexer.SLASH   => Operation.Div,
+        EnlynLexer.PLUS    => Operation.Add, EnlynLexer.MINUS   => Operation.Sub,
+        EnlynLexer.STAR    => Operation.Mul, EnlynLexer.SLASH   => Operation.Div,
         EnlynLexer.PERCENT => Operation.Mod,
 
-        EnlynLexer.AND     => Operation.And,
-        EnlynLexer.OR      => Operation.Or,
+        EnlynLexer.AND     => Operation.And, EnlynLexer.OR      => Operation.Or,
         
-        EnlynLexer.DEQUAL  => Operation.Eq,
-        EnlynLexer.NEQUAL  => Operation.Neq,
-        EnlynLexer.LESS    => Operation.Lt,
-        EnlynLexer.GREATER => Operation.Gt,
-        EnlynLexer.LEQUAL  => Operation.Le,
-        EnlynLexer.GEQUAL  => Operation.Ge,
+        EnlynLexer.DEQUAL  => Operation.Eq,  EnlynLexer.NEQUAL  => Operation.Neq,
+        EnlynLexer.LESS    => Operation.Lt,  EnlynLexer.GREATER => Operation.Gt,
+        EnlynLexer.LEQUAL  => Operation.Le,  EnlynLexer.GEQUAL  => Operation.Ge,
 
-        _ => throw new Exception("Invalid binary operation")
+        _ => throw new Exception()
     };
 
     private Operation MapUnary(IToken token) => token.Type switch // Convert token to operation enum
@@ -480,7 +511,7 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         EnlynLexer.MINUS   => Operation.Neg,
         EnlynLexer.EXCLAIM => Operation.Not,
 
-        _ => throw new Exception("Invalid unary operation")
+        _ => throw new Exception()
     };
 
     public override IExpressionNode VisitIdentifier(EnlynParser.IdentifierContext context) =>
