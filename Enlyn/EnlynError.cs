@@ -20,10 +20,12 @@ public class ErrorLogger
         Location = location,
     });
 
-    public void Catch(Location location, Action handler)
+    public object? Catch(Location location, Action handler)
     {
         try { handler(); }
         catch (EnlynError error) { Report(error.Message, location); }
+
+        return null;
     }
 
 

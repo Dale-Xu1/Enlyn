@@ -3,7 +3,9 @@ namespace Enlyn;
 public class Map<K, V> : Dictionary<K, V> where K : notnull
 {
 
-    public Map(Map<K, V> map) : base(map) { }
+    public Map<K, V>? Parent { get; internal set; }
+
+    public Map(Map<K, V> parent) => Parent = parent;
     public Map() { }
 
 
@@ -21,6 +23,8 @@ public class Map<K, V> : Dictionary<K, V> where K : notnull
         }
     }
 
+    public bool Exists(K key) => ContainsKey(key) || (Parent?.Exists(key) ?? false);
+
 }
 
 public interface IType { }
@@ -30,7 +34,20 @@ public class Type : IType
 {
 
     public TypeNode Name { get; init; }
-    public Type? Parent { get; set; }
+
+    private Type? parent;
+    public Type? Parent
+    {
+        get => parent;
+        internal set
+        {
+            parent = value;
+            if (parent is null) return;
+
+            Fields.Parent = parent.Fields;
+            Methods.Parent = parent.Methods;
+        }
+    }
 
     public Map<IIdentifierNode, Field> Fields { get; init; } = new();
     public Map<IIdentifierNode, Method> Methods { get; init; } = new();
@@ -62,16 +79,56 @@ public class Method
 public class Environment
 {
 
-    public Map<TypeNode, Type> Classes { get; } = new(StandardLibrary.classes);
-    private readonly Stack<Dictionary<IdentifierNode, IType>> scope = new();
+    private Map<IdentifierNode, IType> scope = new();
+    public Map<TypeNode, Type> Classes { get; } =new()
+    {
+        [Standard.unit.Name   ] = Standard.unit,
+        [Standard.any.Name    ] = Standard.any,
+        [Standard.number.Name ] = Standard.number,
+        [Standard.strType.Name] = Standard.strType,
+        [Standard.boolean.Name] = Standard.boolean
+    };
 
 
-    public void Enter() => scope.Push(new Dictionary<IdentifierNode, IType>());
-    public void Exit() => scope.Pop();
+    public IType this[IdentifierNode name]
+    {
+        get => scope[name];
+        set => scope[name] = value;
+    }
+
+    public void Enter() => scope = new Map<IdentifierNode, IType>(scope);
+    public void Exit() => scope = scope.Parent!;
+
+    public void Test(IType expected, IType? target)
+    {
+        if (expected is Option option) switch (target) // Null case falls through
+        {
+            case Option t: Test(option.Type, t.Type); break;
+            case Type type: Test(option.Type, type); break;
+        }
+        else if (expected is Type e) switch (target)
+        {
+            case Option or null: throw new EnlynError($"Type {e.Name} is not an option");
+            case Type t:
+            {
+                if (Check((Type) expected, t)) break;
+                throw new EnlynError($"Type {t.Name} is not compatible with {e.Name}");
+            }
+        }
+
+        bool Check(Type expected, Type target)
+        {
+            if (expected == target) return true;
+            if (target.Parent is null) return false;
+
+            // Check if expected type is a parent of the target
+            return Check(expected, target.Parent);
+        }
+    }
 
 }
 
-internal static class StandardLibrary
+internal static class Standard
 {
 
     public static readonly Type unit = new("unit");
@@ -83,27 +140,45 @@ internal static class StandardLibrary
         }
     };
 
+    public static readonly Type number = new("number") { Parent = any };
+    public static readonly Type strType = new("string") { Parent = any };
+    public static readonly Type boolean = new("boolean") { Parent = any };
+
+
     public static readonly IdentifierNode current = new() { Value = "this" };
     public static readonly IdentifierNode constructor = new() { Value = "new" };
     public static readonly IdentifierNode method = new() { Value = "return" };
 
+}
 
-    public static readonly Map<TypeNode, Type> classes = new()
+public abstract class EnvironmentVisitor<T> : ASTVisitor<T>
+{
+
+    public Environment Environment { get; }
+
+    protected EnvironmentVisitor(Environment environment) => Environment = environment;
+
+
+    protected Type This
     {
-        [unit.Name] = unit,
-        [any.Name ] = any
-    };
+        get => (Type) Environment[Standard.current];
+        set => Environment[Standard.current] = value;
+    }
+
+    protected Type Return
+    {
+        get => (Type) Environment[Standard.method];
+        set => Environment[Standard.method] = value;
+    }
 
 }
 
-public class TypeChecker : ASTVisitor<object?>
+public class TypeChecker : EnvironmentVisitor<object?>
 {
 
-    public Environment Environment { get; } = new();
     private readonly ErrorLogger error;
 
-
-    public TypeChecker(ErrorLogger error) => this.error = error;
+    public TypeChecker(ErrorLogger error) : base(new Environment()) => this.error = error;
 
 
     private record struct ClassData(ClassNode node, Type type);
@@ -122,15 +197,11 @@ public class TypeChecker : ASTVisitor<object?>
         }
 
         // Initialize parent graph and check for cycles
-        foreach ((ClassNode node, Type type) in nodes)
+        foreach ((ClassNode node, Type type) in nodes) error.Catch(node.Location, () =>
         {
-            if (node.Parent is not TypeNode name) continue;
-            error.Catch(node.Location, () =>
-            {
-                Type parent = Environment.Classes[name];
-                type.Parent = parent;
-            });
-        }
+            Type parent = node.Parent is TypeNode name ? Environment.Classes[name] : Standard.any;
+            type.Parent = parent;
+        });
         CheckCycles(program.Classes, from data in nodes select data.type);
 
         // Initialize and check members
@@ -139,7 +210,7 @@ public class TypeChecker : ASTVisitor<object?>
         foreach ((ClassNode node, Type type) in nodes)
         {
             Environment.Enter();
-            // TODO: Add "this" to scope
+            This = type;
 
             foreach (IMemberNode member in node.Members) Visit(member);
             Environment.Exit();
@@ -166,7 +237,7 @@ public class TypeChecker : ASTVisitor<object?>
             if (!children.Contains(parent)) Check(parent, children);
             else foreach (ClassNode node in nodes) if (node.Identifier == parent.Name)
             {
-                error.Report($"Cyclic inheritance found at {parent.Name.Value}", node.Location);
+                error.Report($"Cyclic inheritance found at {parent.Name}", node.Location);
                 return;
             }
         }
@@ -185,7 +256,7 @@ public class TypeChecker : ASTVisitor<object?>
         IType returnType = node.Return switch  
         {
             ITypeNode typeNode => new TypeVisitor(Environment).Visit(typeNode),
-            null => StandardLibrary.unit // Defaults to unit if type is unspecified
+            null => Standard.unit // Defaults to unit if type is unspecified
         };
 
         // Check operator cases
@@ -209,11 +280,11 @@ public class TypeChecker : ASTVisitor<object?>
     });
 
     private void InitializeMember(Type type, ConstructorNode node) => error.Catch(node.Location, () =>
-        type.Methods.Add(StandardLibrary.constructor, new Method
+        type.Methods.Add(Standard.constructor, new Method
         {
             Access = node.Access,
             Parameters = InitializeParameters(node.Parameters),
-            Return = StandardLibrary.unit
+            Return = Standard.unit
         }));
 
     private IType[] InitializeParameters(ParameterNode[] parameters)
@@ -226,32 +297,79 @@ public class TypeChecker : ASTVisitor<object?>
         return types.ToArray();
     }
 
-    public override object? Visit(FieldNode node)
+    public override object? Visit(FieldNode node) => error.Catch(node.Location, () =>
     {
-        return null;
+        Field field = This.Fields[node.Identifier];
+        if (node.Expression is IExpressionNode expression)
+        {
+            IType? type = new ExpressionVisitor(Environment).Visit(expression);
+            Environment.Test(field.Type, type);
+        }
+    });
+
+    public override object? Visit(MethodNode node) => error.Catch(node.Location, () =>
+    {
+        Method method = This.Methods[node.Identifier];
+        CheckOverride(method, node);
+
+        // TODO: Check method body
+        Environment.Enter();
+        Environment.Exit();
+    });
+
+    private void CheckOverride(Method method, MethodNode node)
+    {
+        // Test if parent has a method by the same name
+        Type parent = This.Parent!;
+        if (!parent.Methods.Exists(node.Identifier))
+        {
+            if (node.Override) throw new EnlynError($"No method {node.Identifier} found to override");
+            return;
+        }
+
+        Method previous = parent.Methods[node.Identifier];
+        // TODO: Override rules
     }
 
-    public override object? Visit(MethodNode node)
+    public override object? Visit(ConstructorNode node) => error.Catch(node.Location, () =>
     {
-        return null;
-    }
-
-    public override object? Visit(ConstructorNode node)
-    {
-        return null;
-    }
+        Environment.Enter();
+        Environment.Exit();
+    });
 
 }
 
-internal class TypeVisitor : ASTVisitor<IType>
+internal class ControlVisitor : ASTVisitor<bool>
 {
 
-    private readonly Environment environment;
+    // TODO: Control flow analysis
 
-    public TypeVisitor(Environment environment) => this.environment = environment;
+}
+
+internal class TypeVisitor : EnvironmentVisitor<IType>
+{
+
+    public TypeVisitor(Environment environment) : base(environment) { }
 
 
-    public override IType Visit(TypeNode node) => environment.Classes[node];
+    public override IType Visit(TypeNode node) => Environment.Classes[node];
     public override IType Visit(OptionNode node) => new Option { Type = Visit(node.Type) };
+
+}
+
+internal class ExpressionVisitor : EnvironmentVisitor<IType?>
+{
+
+    public ExpressionVisitor(Environment environment) : base(environment) { }
+
+
+    public override IType Visit(IdentifierNode node) => Environment[node];
+
+    public override IType Visit(NumberNode node) => Standard.number;
+    public override IType Visit(StringNode node) => Standard.strType;
+    public override IType Visit(BooleanNode _) => Standard.boolean;
+
+    public override IType Visit(ThisNode _) => This;
+    public override IType Visit(BaseNode _) => This.Parent!;
 
 }

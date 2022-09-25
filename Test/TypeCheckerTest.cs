@@ -126,8 +126,28 @@ public class TypeCheckerTest
         checker.Visit(ParseProgram(input));
         Enlyn.Environment environment = checker.Environment;
 
-        Assert.AreEqual(1, error.Errors.Count);
+        Assert.AreEqual(2, error.Errors.Count);
         Assert.AreEqual("Binary operation must be defined with 1 parameter", error.Errors[0].Message);
     }
-    
+
+    [TestMethod]
+    public void TestTypeTest()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A",
+            "{",
+            "    public x : any = 5",
+            "    private y : number? = 5",
+            "    private z : number? = true",
+            "}");
+
+        ErrorLogger error = new();
+        TypeChecker checker = new(error);
+
+        checker.Visit(ParseProgram(input));
+
+        Assert.AreEqual(1, error.Errors.Count);
+        Assert.AreEqual("Type boolean is not compatible with number", error.Errors[0].Message);
+    }
+
 }

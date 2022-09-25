@@ -1,4 +1,8 @@
-class A : unitt { }
-class B : A { }
-class C : B { }
-class D : A { }
+class A
+{
+}
+
+class B : A
+{
+    public override f() { }
+}
