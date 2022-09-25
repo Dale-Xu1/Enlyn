@@ -23,6 +23,15 @@ public class TypeCheckerTest
         return tree;
     }
 
+    private static ErrorLogger CheckProgram(string input)
+    {
+        ErrorLogger error = new();
+        TypeChecker checker = new(error);
+
+        checker.Visit(ParseProgram(input));
+        return error;
+    }
+
 
     [TestMethod]
     public void TestClassRedefinition()
@@ -30,11 +39,7 @@ public class TypeCheckerTest
         string input = string.Join(Environment.NewLine,
             "class A : any { }",
             "class A { }");
-
-        ErrorLogger error = new();
-        TypeChecker checker = new(error);
-
-        checker.Visit(ParseProgram(input));
+        ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
         Assert.AreEqual("Redefinition of A", error.Errors[0].Message);
@@ -48,11 +53,7 @@ public class TypeCheckerTest
             "class B : A { }",
             "class C : B { }",
             "class D : C { }");
-
-        ErrorLogger error = new();
-        TypeChecker checker = new(error);
-
-        checker.Visit(ParseProgram(input));
+        ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
         Assert.AreEqual("Cyclic inheritance found at A", error.Errors[0].Message);
@@ -142,11 +143,7 @@ public class TypeCheckerTest
             "    protected y : number? = true",
             "    private z : string = null",
             "}");
-
-        ErrorLogger error = new();
-        TypeChecker checker = new(error);
-
-        checker.Visit(ParseProgram(input));
+        ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(3, error.Errors.Count);
         Assert.AreEqual("Redefinition of y", error.Errors[0].Message);
@@ -162,11 +159,7 @@ public class TypeCheckerTest
             "{",
             "    public f(a : number, a : string) { }",
             "}");
-
-        ErrorLogger error = new();
-        TypeChecker checker = new(error);
-
-        checker.Visit(ParseProgram(input));
+        ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
         Assert.AreEqual("Redefinition of a", error.Errors[0].Message);
@@ -185,13 +178,9 @@ public class TypeCheckerTest
             "{",
             "    public override f(a : number) -> boolean = return true",
             "    public override g(x : string) -> boolean = return false",
-            "    public override h() { }",
+            "    public override h(i : unit) -> unit = return",
             "}");
-
-        ErrorLogger error = new();
-        TypeChecker checker = new(error);
-
-        checker.Visit(ParseProgram(input));
+        ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(2, error.Errors.Count);
         Assert.AreEqual("Type any is not compatible with string", error.Errors[0].Message);
@@ -211,10 +200,7 @@ public class TypeCheckerTest
             "    }",
             "}");
 
-        ErrorLogger error = new();
-        TypeChecker checker = new(error);
-
-        checker.Visit(ParseProgram(input));
+        ErrorLogger error = CheckProgram(input);
         Assert.AreEqual(0, error.Errors.Count);
     }
 
@@ -230,11 +216,7 @@ public class TypeCheckerTest
             "        while true do return 1",
             "    }",
             "}");
-
-        ErrorLogger error = new();
-        TypeChecker checker = new(error);
-
-        checker.Visit(ParseProgram(input));
+        ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
         Assert.AreEqual("Method does not always return a value", error.Errors[0].Message);
@@ -253,15 +235,52 @@ public class TypeCheckerTest
             "{",
             "    public x : string = this.a",
             "    public y : number = this.b",
+            "    protected new() : base(5) { }",
+            "    private z : unit",
             "}");
+        ErrorLogger error = CheckProgram(input);
 
-        ErrorLogger error = new();
-        TypeChecker checker = new(error);
+        Assert.AreEqual(2, error.Errors.Count);
+        Assert.AreEqual("Member a is private", error.Errors[0].Message);
+        Assert.AreEqual("Invalid number of arguments", error.Errors[1].Message);
+    }
 
-        checker.Visit(ParseProgram(input));
+    [TestMethod]
+    public void TestCall()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A : unit",
+            "{",
+            "    private z : unit",
+            "    public f(a : number) = this.g(a)",
+            "    public g(x : any) = this.f(x)",
+            "}");
+        ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
-        Assert.AreEqual("Member a is private", error.Errors[0].Message);
+        Assert.AreEqual("Type any is not compatible with number", error.Errors[0].Message);
     }
+
+    [TestMethod]
+    public void TestAssertAndCast()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A : unit",
+            "{",
+            "    private a : unit = null!",
+            "    private b : number?",
+            "    private c : number = this.b!",
+            "    private d : number = this.b as number",
+            "    private e : any = null as any",
+            "    private f : boolean = this.e is string",
+            "}");
+        ErrorLogger error = CheckProgram(input);
+
+        Assert.AreEqual(2, error.Errors.Count);
+        Assert.AreEqual("Invalid assertion target", error.Errors[0].Message);
+        Assert.AreEqual("Null literal has no type", error.Errors[1].Message);
+    }
+
+    // TODO: Assignment tests (once let statements have been implemented)
 
 }

@@ -116,11 +116,20 @@ internal static class Standard
 {
 
     public static readonly Type unit = new("unit");
-    public static readonly Type any = new("any");
 
+    public static readonly Type any = new("any");
     public static readonly Type number = new("number") { Parent = any };
     public static readonly Type strType = new("string") { Parent = any };
     public static readonly Type boolean = new("boolean") { Parent = any };
+
+    static Standard()
+    {
+        any.Methods[Environment.constructor] = new Method
+        {
+            Access = Access.Public,
+            Parameters = new IType[0], Return = unit
+        };
+    }
 
 
     public static Map<TypeNode, Type> Classes => new()
@@ -144,15 +153,15 @@ public class Environment
         if (expected is Option option) switch (target) // Null case falls through
         {
             case Option t: Test(option.Type, t.Type); break;
-            case Type type: Test(option.Type, type); break;
+            default: Test(option.Type, target); break;
         }
-        else if (expected is Type e) switch (target)
+        else if (expected is Type type) switch (target)
         {
-            case Option or null: throw new EnlynError($"Type {e.Name} is not an option");
+            case Option or null: throw new EnlynError($"Type {type.Name} is not an option");
             case Type t:
             {
-                if (Check((Type) expected, t)) break;
-                throw new EnlynError($"Type {t.Name} is not compatible with {e.Name}");
+                if (Check(type, t)) break;
+                throw new EnlynError($"Type {t.Name} is not compatible with {type.Name}");
             }
         }
 
@@ -375,7 +384,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
         if (method.Access > previous.Access)
             throw new EnlynError("Method cannot be less accessible than the overridden method");
         if (method.Parameters.Length != previous.Parameters.Length)
-            throw new EnlynError("Invalid parameter signature in overridden method");
+            throw new EnlynError("Invalid number of parameters");
 
         // Overridden parameters can be more generic
         foreach ((IType m, IType p) in method.Parameters.Zip(previous.Parameters)) Environment.Test(m, p);
@@ -388,7 +397,10 @@ public class TypeChecker : EnvironmentVisitor<object?>
         Return = Standard.unit;
 
         foreach (ParameterNode parameter in node.Parameters) Visit(parameter);
-        // TODO: Check base call
+
+        // Check base call
+        Method parent = This.Parent!.Methods.Get(Environment.constructor, This);
+        new ExpressionVisitor(Environment).CheckSignature(parent, node.Arguments);
 
         Visit(node.Body);
         Environment.Exit();
@@ -459,15 +471,72 @@ internal class ExpressionVisitor : EnvironmentVisitor<IType?>
 
     public override IType Visit(CallNode node)
     {
-        return null!;
+        // Call target must be a method
+        if (node.Target is not AccessNode target || Visit(target.Target) is not Type expression)
+            throw new EnlynError("Invalid call target");
+
+        Method method = expression.Methods.Get(target.Identifier, This);
+        return CheckSignature(method, node.Arguments);
     }
 
-    public override IType Visit(NewNode node) => default!;
+    public override IType Visit(NewNode node)
+    {
+        Type type = Environment.Classes[node.Type];
+        Method method = type.Methods.Get(Environment.constructor, This);
 
-    public override IType Visit(AssertNode node) => default!;
-    public override IType Visit(AssignNode node) => default!;
-    public override IType Visit(InstanceNode node) => default!;
-    public override IType Visit(CastNode node) => default!;
+        return CheckSignature(method, node.Arguments);
+    }
+
+    public IType CheckSignature(Method method, IExpressionNode[] arguments)
+    {
+        // Test if arguments match signature types
+        if (method.Parameters.Length != arguments.Length) throw new EnlynError("Invalid number of arguments");
+        foreach ((IType expected, IExpressionNode argument) in method.Parameters.Zip(arguments))
+        {
+            IType? type = Visit(argument);
+            Environment.Test(expected, type);
+        }
+
+        return method.Return;
+    }
+
+    public override IType Visit(AssertNode node) => Visit(node.Expression) switch
+    {
+        Option option => option.Type,
+        _ => throw new EnlynError("Invalid assertion target")
+    };
+
+    public override IType Visit(AssignNode node)
+    {
+        IType expected = node.Target switch
+        {
+            IdentifierNode or AccessNode => Visit(node.Target)!,
+            _ => throw new EnlynError("Invalid assignment target")
+        };
+        IType? type = Visit(node.Expression);
+
+        Environment.Test(expected, type);
+        return expected;
+    }
+
+    public override IType Visit(InstanceNode node)
+    {
+        TestInstance(node.Expression, node.Type);
+        return Standard.boolean;
+    }
+
+    public override IType Visit(CastNode node) => TestInstance(node.Expression, node.Type);
+    private IType TestInstance(IExpressionNode expression, ITypeNode type)
+    {
+        IType? target = Visit(expression);
+        IType result = new TypeVisitor(Environment).Visit(type);
+
+        if (target is null) throw new EnlynError("Null literal has no type");
+        Environment.Test(target, result); // Result should be more specific
+
+        return result;
+    }
+
     public override IType Visit(BinaryNode node) => default!;
     public override IType Visit(UnaryNode node) => default!;
 
