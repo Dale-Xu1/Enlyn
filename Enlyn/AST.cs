@@ -22,7 +22,7 @@ public class ClassNode : LocationNode, INode
 }
 
 public enum Access { Public, Protected, Private }
-public interface IMemberNode : INode { public Access Access { get; init; } }
+public interface IMemberNode : INode { public Access Access { get; } }
 
 public class FieldNode : LocationNode, IMemberNode
 {
@@ -98,7 +98,7 @@ public class ExpressionStatementNode : LocationNode, IStatementNode
 
 public interface ITypeNode : INode { }
 public interface IExpressionNode : INode { }
-public interface IIdentifierNode : INode { }
+public interface IIdentifierNode { }
 
 public class OptionNode : ITypeNode { public ITypeNode Type { get; init; } = null!; }
 public record struct TypeNode : ITypeNode
@@ -243,8 +243,6 @@ public abstract class ASTVisitor<T>
     public virtual T Visit(BinaryNode node) => default!;
     public virtual T Visit(UnaryNode node) => default!;
     public virtual T Visit(IdentifierNode node) => default!;
-    public virtual T Visit(BinaryIdentifierNode node) => default!;
-    public virtual T Visit(UnaryIdentifierNode node) => default!;
     public virtual T Visit(NumberNode node) => default!;
     public virtual T Visit(StringNode node) => default!;
     public virtual T Visit(BooleanNode node) => default!;

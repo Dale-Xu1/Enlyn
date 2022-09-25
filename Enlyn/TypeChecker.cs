@@ -3,7 +3,7 @@ namespace Enlyn;
 public class Map<K, V> : Dictionary<K, V> where K : notnull
 {
 
-    public Map<K, V>? Parent { get; internal set; }
+    public Map<K, V>? Parent { get; protected set; }
 
     public Map(Map<K, V> parent) => Parent = parent;
     public Map() { }
@@ -14,6 +14,8 @@ public class Map<K, V> : Dictionary<K, V> where K : notnull
         get
         {
             if (ContainsKey(key)) return base[key];
+            if (Parent is not null) return Parent[key];
+
             throw new EnlynError($"{key} not found");
         }
         set
@@ -24,6 +26,35 @@ public class Map<K, V> : Dictionary<K, V> where K : notnull
     }
 
     public bool Exists(K key) => ContainsKey(key) || (Parent?.Exists(key) ?? false);
+
+}
+
+public class MemberMap<K, V> : Map<K, V> where K : notnull where V : IMember
+{
+
+    public new MemberMap<K, V> Parent { set => base.Parent = value; }
+    private readonly Type type;
+
+    public MemberMap(Type type) => this.type = type;
+
+
+    public V Get(K key, Type current)
+    {
+        if (ContainsKey(key))
+        {
+            V value = this[key];
+            switch (value.Access) // Public case falls through
+            {
+                case Access.Private when current != type: throw new EnlynError($"Member {key} is private");
+                case Access.Protected: Environment.Test(type, current); break;
+            }
+
+            return value;
+        }
+
+        if (base.Parent is MemberMap<K, V> parent) return parent.Get(key, current);
+        throw new EnlynError($"Member {key} not found");
+    }
 
 }
 
@@ -49,16 +80,21 @@ public class Type : IType
         }
     }
 
-    public Map<IIdentifierNode, Field> Fields { get; init; } = new();
-    public Map<IIdentifierNode, Method> Methods { get; init; } = new();
+    public MemberMap<IdentifierNode, Field> Fields { get; }
+    public MemberMap<IIdentifierNode, Method> Methods { get; }
 
 
-    public Type(string name) => Name = new TypeNode { Value = name };
-    public Type() { }
+    public Type(string name) : this() => Name = new TypeNode { Value = name };
+    public Type()
+    {
+        Fields = new MemberMap<IdentifierNode, Field>(this);
+        Methods = new MemberMap<IIdentifierNode, Method>(this);
+    }
 
 }
 
-public class Field
+public interface IMember { public Access Access { get; } }
+public class Field : IMember
 {
 
     public Access Access { get; init; }
@@ -66,7 +102,7 @@ public class Field
 
 }
 
-public class Method
+public class Method : IMember
 {
 
     public Access Access { get; init; }
@@ -76,30 +112,34 @@ public class Method
 
 }
 
+internal static class Standard
+{
+
+    public static readonly Type unit = new("unit");
+    public static readonly Type any = new("any");
+
+    public static readonly Type number = new("number") { Parent = any };
+    public static readonly Type strType = new("string") { Parent = any };
+    public static readonly Type boolean = new("boolean") { Parent = any };
+
+
+    public static Map<TypeNode, Type> Classes => new()
+    {
+        [unit.Name   ] = unit,
+        [any.Name    ] = any,
+        [number.Name ] = number,
+        [strType.Name] = strType,
+        [boolean.Name] = boolean
+    };
+
+}
+
 public class Environment
 {
 
-    private Map<IdentifierNode, IType> scope = new();
-    public Map<TypeNode, Type> Classes { get; } =new()
-    {
-        [Standard.unit.Name   ] = Standard.unit,
-        [Standard.any.Name    ] = Standard.any,
-        [Standard.number.Name ] = Standard.number,
-        [Standard.strType.Name] = Standard.strType,
-        [Standard.boolean.Name] = Standard.boolean
-    };
+    public static readonly IdentifierNode constructor = new() { Value = "new" };
 
-
-    public IType this[IdentifierNode name]
-    {
-        get => scope[name];
-        set => scope[name] = value;
-    }
-
-    public void Enter() => scope = new Map<IdentifierNode, IType>(scope);
-    public void Exit() => scope = scope.Parent!;
-
-    public void Test(IType expected, IType? target)
+    public static void Test(IType expected, IType? target)
     {
         if (expected is Option option) switch (target) // Null case falls through
         {
@@ -126,26 +166,19 @@ public class Environment
         }
     }
 
-}
 
-internal static class Standard
-{
+    private Map<IdentifierNode, IType> scope = new();
+    public Map<TypeNode, Type> Classes { get; } = Standard.Classes;
 
-    public static readonly Type unit = new("unit");
-    public static readonly Type any = new("any")
+
+    public IType this[IdentifierNode name]
     {
-        Methods = new()
-        {
+        get => scope[name];
+        set => scope[name] = value;
+    }
 
-        }
-    };
-
-    public static readonly Type number = new("number") { Parent = any };
-    public static readonly Type strType = new("string") { Parent = any };
-    public static readonly Type boolean = new("boolean") { Parent = any };
-
-
-    public static readonly IdentifierNode constructor = new() { Value = "new" };
+    public void Enter() => scope = new Map<IdentifierNode, IType>(scope);
+    public void Exit() => scope = scope.Parent!;
 
 }
 
@@ -280,7 +313,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
     });
 
     private void InitializeMember(Type type, ConstructorNode node) => error.Catch(node.Location, () =>
-        type.Methods[Standard.constructor] = new Method
+        type.Methods[Environment.constructor] = new Method
         {
             Access = node.Access,
             Parameters = InitializeParameters(node.Parameters),
@@ -369,6 +402,11 @@ public class TypeChecker : EnvironmentVisitor<object?>
 
 
     // TODO: Statement checking
+    public override object? Visit(ExpressionStatementNode node)
+    {
+        new ExpressionVisitor(Environment).Visit(node.Expression);
+        return null;
+    }
 
 }
 
@@ -411,7 +449,27 @@ internal class ExpressionVisitor : EnvironmentVisitor<IType?>
     public ExpressionVisitor(Environment environment) : base(environment) { }
 
 
-    // TODO: Expression checking
+    public override IType Visit(AccessNode node)
+    {
+        if (Visit(node.Target) is not Type expression) throw new EnlynError("Cannot access from nullable type");
+
+        Field field = expression.Fields.Get(node.Identifier, This);
+        return field.Type;
+    }
+
+    public override IType Visit(CallNode node)
+    {
+        return null!;
+    }
+
+    public override IType Visit(NewNode node) => default!;
+
+    public override IType Visit(AssertNode node) => default!;
+    public override IType Visit(AssignNode node) => default!;
+    public override IType Visit(InstanceNode node) => default!;
+    public override IType Visit(CastNode node) => default!;
+    public override IType Visit(BinaryNode node) => default!;
+    public override IType Visit(UnaryNode node) => default!;
 
     public override IType Visit(IdentifierNode node) => Environment[node];
 

@@ -137,8 +137,10 @@ public class TypeCheckerTest
             "class A",
             "{",
             "    public x : any = 5",
-            "    private y : number? = 5",
-            "    private y : number? = true",
+            "    private y : number? = null",
+            "    private w : number? = 5",
+            "    protected y : number? = true",
+            "    private z : string = null",
             "}");
 
         ErrorLogger error = new();
@@ -146,9 +148,10 @@ public class TypeCheckerTest
 
         checker.Visit(ParseProgram(input));
 
-        Assert.AreEqual(2, error.Errors.Count);
+        Assert.AreEqual(3, error.Errors.Count);
         Assert.AreEqual("Redefinition of y", error.Errors[0].Message);
         Assert.AreEqual("Type boolean is not compatible with number", error.Errors[1].Message);
+        Assert.AreEqual("Type string is not an option", error.Errors[2].Message);
     }
 
     [TestMethod]
@@ -235,6 +238,30 @@ public class TypeCheckerTest
 
         Assert.AreEqual(1, error.Errors.Count);
         Assert.AreEqual("Method does not always return a value", error.Errors[0].Message);
+    }
+
+    [TestMethod]
+    public void TestAccess()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class B",
+            "{",
+            "    private a : string",
+            "    protected b : number",
+            "}",
+            "class A : B",
+            "{",
+            "    public x : string = this.a",
+            "    public y : number = this.b",
+            "}");
+
+        ErrorLogger error = new();
+        TypeChecker checker = new(error);
+
+        checker.Visit(ParseProgram(input));
+
+        Assert.AreEqual(1, error.Errors.Count);
+        Assert.AreEqual("Member a is private", error.Errors[0].Message);
     }
 
 }
