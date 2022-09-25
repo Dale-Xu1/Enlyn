@@ -175,13 +175,13 @@ public class TypeCheckerTest
         string input = string.Join(Environment.NewLine,
             "class B",
             "{",
-            "    public f(a : number) -> any { }",
-            "    public g(x : any) -> any { }",
+            "    public f(a : number) -> any = return 1",
+            "    public g(x : any) -> any = return 1",
             "}",
             "class A : B",
             "{",
-            "    public override f(a : number) -> string { }",
-            "    public override g(x : boolean) -> string { }",
+            "    public override f(a : number) -> boolean = return true",
+            "    public override g(x : string) -> boolean = return false",
             "    public override h() { }",
             "}");
 
@@ -191,8 +191,50 @@ public class TypeCheckerTest
         checker.Visit(ParseProgram(input));
 
         Assert.AreEqual(2, error.Errors.Count);
-        Assert.AreEqual("Type any is not compatible with boolean", error.Errors[0].Message);
+        Assert.AreEqual("Type any is not compatible with string", error.Errors[0].Message);
         Assert.AreEqual("No method h found to override", error.Errors[1].Message);
+    }
+
+    [TestMethod]
+    public void TestControlSuccess()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A",
+            "{",
+            "    public f() -> number",
+            "    {",
+            "        if true then return 1",
+            "        else return 2",
+            "    }",
+            "}");
+
+        ErrorLogger error = new();
+        TypeChecker checker = new(error);
+
+        checker.Visit(ParseProgram(input));
+        Assert.AreEqual(0, error.Errors.Count);
+    }
+
+    [TestMethod]
+    public void TestControlFail()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A",
+            "{",
+            "    public f() -> number",
+            "    {",
+            "        this.f()",
+            "        while true do return 1",
+            "    }",
+            "}");
+
+        ErrorLogger error = new();
+        TypeChecker checker = new(error);
+
+        checker.Visit(ParseProgram(input));
+
+        Assert.AreEqual(1, error.Errors.Count);
+        Assert.AreEqual("Method does not always return a value", error.Errors[0].Message);
     }
 
 }

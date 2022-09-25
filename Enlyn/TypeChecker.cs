@@ -313,10 +313,8 @@ public class TypeChecker : EnvironmentVisitor<object?>
         CheckOverride(method, node);
 
         // Check control flow
-        if (method.Return != Standard.unit)
-        {
-            // TODO: Control flow analysis
-        }
+        if (method.Return != Standard.unit && !new ControlVisitor().Visit(node.Body))
+            throw new EnlynError("Method does not always return a value");
 
         Environment.Enter();
         Return = method.Return;
@@ -377,6 +375,23 @@ public class TypeChecker : EnvironmentVisitor<object?>
 internal class ControlVisitor : ASTVisitor<bool>
 {
 
+    public override bool Visit(BlockNode node)
+    {
+        bool result = false;
+        foreach (IStatementNode statement in node.Statements) result |= Visit(statement);
+
+        return result;
+    }
+
+    public override bool Visit(IfNode node)
+    {
+        // Can't guarantee if statement will always return if no else branch is specified
+        if (node.Else is null) return false;
+        return Visit(node.Then) && Visit(node.Else);
+    }
+
+    public override bool Visit(ReturnNode _) => true;
+
 }
 
 internal class TypeVisitor : EnvironmentVisitor<IType>
@@ -395,6 +410,8 @@ internal class ExpressionVisitor : EnvironmentVisitor<IType?>
 
     public ExpressionVisitor(Environment environment) : base(environment) { }
 
+
+    // TODO: Expression checking
 
     public override IType Visit(IdentifierNode node) => Environment[node];
 
