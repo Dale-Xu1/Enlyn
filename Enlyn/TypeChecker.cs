@@ -145,9 +145,7 @@ internal static class Standard
     public static readonly Type boolean = new("boolean") { Parent = any };
 
 
-    public static readonly IdentifierNode current = new() { Value = "this" };
     public static readonly IdentifierNode constructor = new() { Value = "new" };
-    public static readonly IdentifierNode method = new() { Value = "return" };
 
 }
 
@@ -159,16 +157,18 @@ public abstract class EnvironmentVisitor<T> : ASTVisitor<T>
     protected EnvironmentVisitor(Environment environment) => Environment = environment;
 
 
+    private static readonly IdentifierNode current = new() { Value = "this" };
     protected Type This
     {
-        get => (Type) Environment[Standard.current];
-        set => Environment[Standard.current] = value;
+        get => (Type) Environment[current];
+        set => Environment[current] = value;
     }
 
-    protected Type Return
+    private static readonly IdentifierNode method = new() { Value = "return" };
+    protected IType Return
     {
-        get => (Type) Environment[Standard.method];
-        set => Environment[Standard.method] = value;
+        get => Environment[method];
+        set => Environment[method] = value;
     }
 
 }
@@ -244,11 +244,11 @@ public class TypeChecker : EnvironmentVisitor<object?>
     }
 
     private void InitializeMember(Type type, FieldNode node) => error.Catch(node.Location, () =>
-        type.Fields.Add(node.Identifier, new Field
+        type.Fields[node.Identifier] = new Field
         {
             Access = node.Access,
             Type = new TypeVisitor(Environment).Visit(node.Type)
-        }));
+        });
 
     private void InitializeMember(Type type, MethodNode node) => error.Catch(node.Location, () =>
     {
@@ -271,21 +271,21 @@ public class TypeChecker : EnvironmentVisitor<object?>
             IIdentifierNode node => node
         };
 
-        type.Methods.Add(identifier, new Method
+        type.Methods[identifier] = new Method
         {
             Access = node.Access,
             Parameters = InitializeParameters(node.Parameters),
             Return = returnType
-        });
+        };
     });
 
     private void InitializeMember(Type type, ConstructorNode node) => error.Catch(node.Location, () =>
-        type.Methods.Add(Standard.constructor, new Method
+        type.Methods[Standard.constructor] = new Method
         {
             Access = node.Access,
             Parameters = InitializeParameters(node.Parameters),
             Return = Standard.unit
-        }));
+        });
 
     private IType[] InitializeParameters(ParameterNode[] parameters)
     {
@@ -312,8 +312,18 @@ public class TypeChecker : EnvironmentVisitor<object?>
         Method method = This.Methods[node.Identifier];
         CheckOverride(method, node);
 
-        // TODO: Check method body
+        // Check control flow
+        if (method.Return != Standard.unit)
+        {
+            // TODO: Control flow analysis
+        }
+
         Environment.Enter();
+        Return = method.Return;
+
+        foreach (ParameterNode parameter in node.Parameters) Visit(parameter);
+        Visit(node.Body);
+
         Environment.Exit();
     });
 
@@ -327,22 +337,45 @@ public class TypeChecker : EnvironmentVisitor<object?>
             return;
         }
 
+        // Check override rules
+        if (!node.Override) throw new EnlynError($"Method {node.Identifier} must declare the override modifier");
         Method previous = parent.Methods[node.Identifier];
-        // TODO: Override rules
+
+        if (method.Access > previous.Access)
+            throw new EnlynError("Method cannot be less accessible than the overridden method");
+        if (method.Parameters.Length != previous.Parameters.Length)
+            throw new EnlynError("Invalid parameter signature in overridden method");
+
+        // Overridden parameters can be more generic
+        foreach ((IType m, IType p) in method.Parameters.Zip(previous.Parameters)) Environment.Test(m, p);
+        Environment.Test(previous.Return, method.Return); // Return type must be more specific
     }
 
     public override object? Visit(ConstructorNode node) => error.Catch(node.Location, () =>
     {
         Environment.Enter();
+        Return = Standard.unit;
+
+        foreach (ParameterNode parameter in node.Parameters) Visit(parameter);
+        // TODO: Check base call
+
+        Visit(node.Body);
         Environment.Exit();
     });
+
+    public override object? Visit(ParameterNode node)
+    {
+        Environment[node.Identifier] = new TypeVisitor(Environment).Visit(node.Type);
+        return null;
+    }
+
+
+    // TODO: Statement checking
 
 }
 
 internal class ControlVisitor : ASTVisitor<bool>
 {
-
-    // TODO: Control flow analysis
 
 }
 
@@ -370,6 +403,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<IType?>
     public override IType Visit(BooleanNode _) => Standard.boolean;
 
     public override IType Visit(ThisNode _) => This;
-    public override IType Visit(BaseNode _) => This.Parent!;
+    public override IType? Visit(BaseNode _) => This.Parent;
+    public override IType? Visit(NullNode _) => null;
 
 }

@@ -138,7 +138,26 @@ public class TypeCheckerTest
             "{",
             "    public x : any = 5",
             "    private y : number? = 5",
-            "    private z : number? = true",
+            "    private y : number? = true",
+            "}");
+
+        ErrorLogger error = new();
+        TypeChecker checker = new(error);
+
+        checker.Visit(ParseProgram(input));
+
+        Assert.AreEqual(2, error.Errors.Count);
+        Assert.AreEqual("Redefinition of y", error.Errors[0].Message);
+        Assert.AreEqual("Type boolean is not compatible with number", error.Errors[1].Message);
+    }
+
+    [TestMethod]
+    public void TestParameter()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A",
+            "{",
+            "    public f(a : number, a : string) { }",
             "}");
 
         ErrorLogger error = new();
@@ -147,7 +166,33 @@ public class TypeCheckerTest
         checker.Visit(ParseProgram(input));
 
         Assert.AreEqual(1, error.Errors.Count);
-        Assert.AreEqual("Type boolean is not compatible with number", error.Errors[0].Message);
+        Assert.AreEqual("Redefinition of a", error.Errors[0].Message);
+    }
+
+    [TestMethod]
+    public void TestOverride()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class B",
+            "{",
+            "    public f(a : number) -> any { }",
+            "    public g(x : any) -> any { }",
+            "}",
+            "class A : B",
+            "{",
+            "    public override f(a : number) -> string { }",
+            "    public override g(x : boolean) -> string { }",
+            "    public override h() { }",
+            "}");
+
+        ErrorLogger error = new();
+        TypeChecker checker = new(error);
+
+        checker.Visit(ParseProgram(input));
+
+        Assert.AreEqual(2, error.Errors.Count);
+        Assert.AreEqual("Type any is not compatible with boolean", error.Errors[0].Message);
+        Assert.AreEqual("No method h found to override", error.Errors[1].Message);
     }
 
 }
