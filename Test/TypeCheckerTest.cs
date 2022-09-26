@@ -382,4 +382,21 @@ public class TypeCheckerTest
         Assert.AreEqual("Type boolean is not an option", error.Errors[1].Message);
     }
 
+    [TestMethod]
+    public void TestStandardLibrary()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class Main : any",
+            "{",
+            "    public new() : base()",
+            "    {",
+            "        let io = new IO()",
+            "        io.out(io.in() + \"Hello\")",
+            "    }",
+            "}");
+
+        ErrorLogger error = CheckProgram(input);
+        Assert.AreEqual(0, error.Errors.Count);
+    }
+
 }

@@ -130,13 +130,17 @@ internal static class Standard
     public static Type String { get; } = new("string") { Parent = Any };
     public static Type Boolean { get; } = new("boolean") { Parent = Any };
 
+    private static readonly Type io = new("IO") { Parent = Any };
+
     public static Map<TypeNode, Type> Classes => new()
     {
         [Unit.Name   ] = Unit,
         [Any.Name    ] = Any,
         [Number.Name ] = Number,
         [String.Name ] = String,
-        [Boolean.Name] = Boolean
+        [Boolean.Name] = Boolean,
+
+        [io.Name     ] = io
     };
 
     internal static Method equality = new()
@@ -208,6 +212,19 @@ internal static class Standard
         {
             Access = Access.Public,
             Parameters = new Type[0], Return = Boolean
+        };
+
+        io.Methods[new IdentifierNode { Value = "out" }] = new Method
+        {
+            Access = Access.Public,
+            Parameters = new[] { new Option { Type = Any } },
+            Return = Unit
+        };
+        io.Methods[new IdentifierNode { Value = "in" }] = new Method
+        {
+            Access = Access.Public,
+            Parameters = new Type[0],
+            Return = String
         };
     }
 
@@ -614,7 +631,8 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
         Type type = Environment.Classes[node.Type];
         Method method = type.Methods.Get(Environment.constructor, This);
 
-        return CheckSignature(method, node.Arguments);
+        CheckSignature(method, node.Arguments);
+        return type;
     }
 
     public Type CheckSignature(Method method, IExpressionNode[] arguments)
