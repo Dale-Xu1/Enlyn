@@ -479,12 +479,55 @@ public class TypeChecker : EnvironmentVisitor<object?>
     }
 
 
-    // TODO: Statement checking
-    public override object? Visit(ExpressionStatementNode node)
+    public override object? Visit(LetNode node) => error.Catch(node.Location, () =>
     {
-        new ExpressionVisitor(Environment).Visit(node.Expression);
+        Type type = new ExpressionVisitor(Environment).Visit(node.Expression);
+        if (node.Type is not null) // Use inferred type from expression if no type is declared
+        {
+            Type expected = new TypeVisitor(Environment).Visit(node.Type);
+            Environment.Test(expected, type);
+
+            type = expected;
+        }
+
+        // Infer type any? if expression is null
+        if (type is Null) type = new Option { Type = Standard.Any };
+        Environment[node.Identifier] = type;
+    });
+
+    public override object? Visit(IfNode node) => error.Catch(node.Location, () =>
+    {
+
+    });
+
+    public override object? Visit(WhileNode node) => error.Catch(node.Location, () =>
+    {
+
+    });
+
+    public override object? Visit(ReturnNode node) => error.Catch(node.Location, () =>
+    {
+        // Empty return value can only be used if method has no return type
+        if (Return == Standard.Unit)
+        {
+            if (node.Expression is null) return;
+            throw new EnlynError("Method cannot return a value");
+        }
+        else if (node.Expression is null) throw new EnlynError("Method cannot return unit");
+
+        // Verify expression type
+        Type type = new ExpressionVisitor(Environment).Visit(node.Expression);
+        Environment.Test(Return, type);
+    });
+
+    public override object? Visit(BlockNode node)
+    {
+        foreach (IStatementNode statement in node.Statements) Visit(statement);
         return null;
     }
+
+    public override object? Visit(ExpressionStatementNode node) => error.Catch(node.Location, () =>
+        new ExpressionVisitor(Environment).Visit(node.Expression));
 
 }
 
@@ -538,8 +581,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
     public override Type Visit(CallNode node)
     {
         // Call target must be a method
-        if (node.Target is not AccessNode target)
-            throw new EnlynError("Invalid call target");
+        if (node.Target is not AccessNode target) throw new EnlynError("Invalid call target");
 
         Type type = Visit(target.Target);
         Method method = type.Methods.Get(target.Identifier, This);

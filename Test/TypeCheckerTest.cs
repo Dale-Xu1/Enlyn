@@ -281,8 +281,6 @@ public class TypeCheckerTest
         Assert.AreEqual("Type any is not compatible with null", error.Errors[1].Message);
     }
 
-    // TODO: Assignment tests (once let statements have been implemented)
-
     [TestMethod]
     public void TestOperators()
     {
@@ -292,7 +290,6 @@ public class TypeCheckerTest
             "    private a : number = 1 + 2",
             "    private b : boolean = true & \"hi\"",
             "    private c : boolean = \"\" == 5",
-            "",
             "    private x : any? = null",
             "    private d : boolean = this.x == null",
             "}");
@@ -301,6 +298,47 @@ public class TypeCheckerTest
         Assert.AreEqual(2, error.Errors.Count);
         Assert.AreEqual("Type string is not compatible with boolean", error.Errors[0].Message);
         Assert.AreEqual("Member == not found", error.Errors[1].Message);
+    }
+
+    [TestMethod]
+    public void TestReturn()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A : unit",
+            "{",
+            "    public f() = return",
+            "    public g() -> number",
+            "    {",
+            "        return",
+            "        return true",
+            "    }",
+            "}");
+        ErrorLogger error = CheckProgram(input);
+
+        Assert.AreEqual(2, error.Errors.Count);
+        Assert.AreEqual("Method cannot return unit", error.Errors[0].Message);
+        Assert.AreEqual("Type boolean is not compatible with number", error.Errors[1].Message);
+    }
+
+    [TestMethod]
+    public void TestLetAndAssign()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class Main",
+            "{",
+            "    public f()",
+            "    {",
+            "        let x = null",
+            "        let y : boolean = true",
+            "        let z : boolean? = y",
+            "        x = 2",
+            "        y = 5",
+            "    }",
+            "}");
+        ErrorLogger error = CheckProgram(input);
+
+        Assert.AreEqual(1, error.Errors.Count);
+        Assert.AreEqual("Type number is not compatible with boolean", error.Errors[0].Message);
     }
 
 }
