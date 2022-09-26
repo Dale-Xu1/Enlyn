@@ -258,6 +258,12 @@ public class Environment
         }
     }
 
+    public static void TestValue(Type type)
+    {
+        if (type == Standard.Unit || type == Standard.Number || type == Standard.String || type == Standard.Boolean)
+            throw new EnlynError("Invalid value type");
+    }
+
 
     private Map<IdentifierNode, Type> scope = new();
     public Map<TypeNode, Type> Classes { get; } = Standard.Classes;
@@ -325,6 +331,8 @@ public class TypeChecker : EnvironmentVisitor<object?>
         foreach ((ClassNode node, Type type) in nodes) error.Catch(node.Location, () =>
         {
             Type parent = node.Parent is TypeNode name ? Environment.Classes[name] : Standard.Any;
+
+            Environment.TestValue(parent);
             type.Parent = parent;
         });
         CheckCycles(program.Classes, from data in nodes select data.type);
@@ -629,9 +637,11 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
     public override Type Visit(NewNode node)
     {
         Type type = Environment.Classes[node.Type];
-        Method method = type.Methods.Get(Environment.constructor, This);
+        Environment.TestValue(type);
 
+        Method method = type.Methods.Get(Environment.constructor, This);
         CheckSignature(method, node.Arguments);
+
         return type;
     }
 

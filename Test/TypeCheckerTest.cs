@@ -1,4 +1,3 @@
-#define TEST
 namespace Test;
 using Antlr4.Runtime;
 using Enlyn;

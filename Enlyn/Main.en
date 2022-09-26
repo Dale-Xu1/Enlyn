@@ -1,8 +1,11 @@
-class A
-{
-}
+class A { }
 
 class B : A
 {
-    public override f() { }
+    private x : number
+    public new()
+    {
+        let a : A = new B()
+        let x = a as B.x
+    }
 }
