@@ -94,13 +94,9 @@ public class Type
 public class Null : Type { public Null() : base("null") { } }
 public class Option : Type
 {
-    
-    public Type Type { get; init; } = null!;
 
-    public Option() : base("option")
-    {
-        // TODO: Operators here too
-    }
+    public Type Type { get; init; } = null!;
+    public Option() : base("option") { }
 
 }
 
@@ -118,7 +114,7 @@ public class Method : IMember
 
     public Access Access { get; init; }
 
-    public Type[] Parameters { get; init; } = null!;
+    public Type[] Parameters { get; internal set; } = null!;
     public Type Return { get; init; } = null!;
 
 }
@@ -143,18 +139,75 @@ internal static class Standard
         [Boolean.Name] = Boolean
     };
 
+    internal static Method equality = new()
+    {
+        Access = Access.Public,
+        Parameters = new[] { Any },
+        Return = Boolean
+    };
+
+    internal static Method arithmetic = new()
+    {
+        Access = Access.Public,
+        Parameters = new[] { Number },
+        Return = Number
+    };
+
+    internal static Method comparison = new()
+    {
+        Access = Access.Public,
+        Parameters = new[] { Number },
+        Return = Boolean
+    };
+
+    internal static Method logical = new()
+    {
+        Access = Access.Public,
+        Parameters = new[] { Boolean },
+        Return = Boolean
+    };
+
 
     static Standard()
     {
-        Method equality = new() // TODO: Add operators to standard library
-        {
-            Access = Access.Public
-        };
-
         Any.Methods[Environment.constructor] = new Method
         {
             Access = Access.Public,
             Parameters = new Type[0], Return = Unit
+        };
+        Any.Methods[new BinaryIdentifierNode { Operation = Operation.Eq  }] = equality;
+        Any.Methods[new BinaryIdentifierNode { Operation = Operation.Neq }] = equality;
+
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Add }] = arithmetic;
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Sub }] = arithmetic;
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Mul }] = arithmetic;
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Div }] = arithmetic;
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Mod }] = arithmetic;
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Lt  }] = comparison;
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Gt  }] = comparison;
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Le  }] = comparison;
+        Number.Methods[new BinaryIdentifierNode { Operation = Operation.Ge  }] = comparison;
+        Number.Methods[new UnaryIdentifierNode  { Operation = Operation.Neg }] = new Method
+        {
+            Access = Access.Public,
+            Parameters = new Type[0], Return = Number
+        };
+
+        String.Fields[new IdentifierNode { Value = "length" }] =
+            new Field { Access = Access.Public, Type = Number };
+        String.Methods[new BinaryIdentifierNode { Operation = Operation.Add }] = new Method
+        {
+            Access = Access.Public,
+            Parameters = new[] { String },
+            Return = String
+        };
+
+        Boolean.Methods[new BinaryIdentifierNode { Operation = Operation.And }] = logical;
+        Boolean.Methods[new BinaryIdentifierNode { Operation = Operation.Or  }] = logical;
+        Boolean.Methods[new UnaryIdentifierNode  { Operation = Operation.Not }] = new Method
+        {
+            Access = Access.Public,
+            Parameters = new Type[0], Return = Boolean
         };
     }
 

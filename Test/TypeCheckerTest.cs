@@ -283,4 +283,24 @@ public class TypeCheckerTest
 
     // TODO: Assignment tests (once let statements have been implemented)
 
+    [TestMethod]
+    public void TestOperators()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A : unit",
+            "{",
+            "    private a : number = 1 + 2",
+            "    private b : boolean = true & \"hi\"",
+            "    private c : boolean = \"\" == 5",
+            "",
+            "    private x : any? = null",
+            "    private d : boolean = this.x == null",
+            "}");
+        ErrorLogger error = CheckProgram(input);
+
+        Assert.AreEqual(2, error.Errors.Count);
+        Assert.AreEqual("Type string is not compatible with boolean", error.Errors[0].Message);
+        Assert.AreEqual("Member == not found", error.Errors[1].Message);
+    }
+
 }
