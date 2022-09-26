@@ -278,7 +278,7 @@ public class TypeCheckerTest
 
         Assert.AreEqual(2, error.Errors.Count);
         Assert.AreEqual("Invalid assertion target", error.Errors[0].Message);
-        Assert.AreEqual("Null literal has no type", error.Errors[1].Message);
+        Assert.AreEqual("Type any is not compatible with null", error.Errors[1].Message);
     }
 
     // TODO: Assignment tests (once let statements have been implemented)

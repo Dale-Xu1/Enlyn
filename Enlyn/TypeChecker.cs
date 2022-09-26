@@ -32,7 +32,7 @@ public class Map<K, V> : Dictionary<K, V> where K : notnull
 public class MemberMap<K, V> : Map<K, V> where K : notnull where V : IMember
 {
 
-    public new MemberMap<K, V> Parent { set => base.Parent = value; }
+    internal new MemberMap<K, V> Parent { set => base.Parent = value; }
     private readonly Type type;
 
     public MemberMap(Type type) => this.type = type;
@@ -58,15 +58,24 @@ public class MemberMap<K, V> : Map<K, V> where K : notnull where V : IMember
 
 }
 
-public interface IType { }
-
-public class Option : IType { public IType Type { get; init; } = null!; }
-public class Type : IType
+public class Type
 {
 
     public TypeNode Name { get; init; }
-
     private Type? parent;
+
+    public MemberMap<IdentifierNode, Field> Fields { get; }
+    public MemberMap<IIdentifierNode, Method> Methods { get; }
+
+
+    public Type(string name) : this() => Name = new TypeNode { Value = name };
+    public Type()
+    {
+        Fields = new(this);
+        Methods = new(this);
+    }
+
+
     public Type? Parent
     {
         get => parent;
@@ -80,15 +89,17 @@ public class Type : IType
         }
     }
 
-    public MemberMap<IdentifierNode, Field> Fields { get; }
-    public MemberMap<IIdentifierNode, Method> Methods { get; }
+}
 
+public class Null : Type { public Null() : base("null") { } }
+public class Option : Type
+{
+    
+    public Type Type { get; init; } = null!;
 
-    public Type(string name) : this() => Name = new TypeNode { Value = name };
-    public Type()
+    public Option() : base("option")
     {
-        Fields = new MemberMap<IdentifierNode, Field>(this);
-        Methods = new MemberMap<IIdentifierNode, Method>(this);
+        // TODO: Operators here too
     }
 
 }
@@ -98,7 +109,7 @@ public class Field : IMember
 {
 
     public Access Access { get; init; }
-    public IType Type { get; init; } = null!;
+    public Type Type { get; init; } = null!;
 
 }
 
@@ -107,20 +118,31 @@ public class Method : IMember
 
     public Access Access { get; init; }
 
-    public IType[] Parameters { get; init; } = null!;
-    public IType Return { get; init; } = null!;
+    public Type[] Parameters { get; init; } = null!;
+    public Type Return { get; init; } = null!;
 
 }
 
 internal static class Standard
 {
 
-    public static readonly Type unit = new("unit");
+    public static Type Unit { get; } = new("unit");
+    public static Null Null { get; } = new();
 
-    public static readonly Type any = new("any");
-    public static readonly Type number = new("number") { Parent = any };
-    public static readonly Type strType = new("string") { Parent = any };
-    public static readonly Type boolean = new("boolean") { Parent = any };
+    public static Type Any { get; } = new("any");
+    public static Type Number { get; } = new("number") { Parent = Any };
+    public static Type String { get; } = new("string") { Parent = Any };
+    public static Type Boolean { get; } = new("boolean") { Parent = Any };
+
+    public static Map<TypeNode, Type> Classes => new()
+    {
+        [Unit.Name   ] = Unit,
+        [Any.Name    ] = Any,
+        [Number.Name ] = Number,
+        [String.Name ] = String,
+        [Boolean.Name] = Boolean
+    };
+
 
     static Standard()
     {
@@ -129,22 +151,12 @@ internal static class Standard
             Access = Access.Public
         };
 
-        any.Methods[Environment.constructor] = new Method
+        Any.Methods[Environment.constructor] = new Method
         {
             Access = Access.Public,
-            Parameters = new IType[0], Return = unit
+            Parameters = new Type[0], Return = Unit
         };
     }
-
-
-    public static Map<TypeNode, Type> Classes => new()
-    {
-        [unit.Name   ] = unit,
-        [any.Name    ] = any,
-        [number.Name ] = number,
-        [strType.Name] = strType,
-        [boolean.Name] = boolean
-    };
 
 }
 
@@ -153,22 +165,18 @@ public class Environment
 
     public static readonly IdentifierNode constructor = new() { Value = "new" };
 
-    public static void Test(IType expected, IType? target)
+    public static void Test(Type expected, Type target)
     {
-        if (expected is Option option) switch (target) // Null case falls through
+        if (expected is Option e) switch (target)
         {
-            case Option t: Test(option.Type, t.Type); break;
-            case Type: Test(option.Type, target); break;
+            case Option t: Test(e.Type, t.Type); break;
+            case Null: break;
+
+            default: Test(e.Type, target); break;
         }
-        else if (expected is Type type) switch (target)
-        {
-            case Option or null: throw new EnlynError($"Type {type.Name} is not an option");
-            case Type t:
-            {
-                if (Check(type, t)) break;
-                throw new EnlynError($"Type {t.Name} is not compatible with {type.Name}");
-            }
-        }
+        else if (target is Option or Null) throw new EnlynError($"Type {expected.Name} is not an option");
+        else if (!Check(expected, target))
+            throw new EnlynError($"Type {target.Name} is not compatible with {expected.Name}");
 
         bool Check(Type expected, Type target)
         {
@@ -181,17 +189,17 @@ public class Environment
     }
 
 
-    private Map<IdentifierNode, IType> scope = new();
+    private Map<IdentifierNode, Type> scope = new();
     public Map<TypeNode, Type> Classes { get; } = Standard.Classes;
 
 
-    public IType this[IdentifierNode name]
+    public Type this[IdentifierNode name]
     {
         get => scope[name];
         set => scope[name] = value;
     }
 
-    public void Enter() => scope = new Map<IdentifierNode, IType>(scope);
+    public void Enter() => scope = new Map<IdentifierNode, Type>(scope);
     public void Exit() => scope = scope.Parent!;
 
 }
@@ -207,12 +215,12 @@ public abstract class EnvironmentVisitor<T> : ASTVisitor<T>
     private static readonly IdentifierNode current = new() { Value = "this" };
     protected Type This
     {
-        get => (Type) Environment[current];
+        get => Environment[current];
         set => Environment[current] = value;
     }
 
     private static readonly IdentifierNode method = new() { Value = "return" };
-    protected IType Return
+    protected Type Return
     {
         get => Environment[method];
         set => Environment[method] = value;
@@ -246,7 +254,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
         // Initialize parent graph and check for cycles
         foreach ((ClassNode node, Type type) in nodes) error.Catch(node.Location, () =>
         {
-            Type parent = node.Parent is TypeNode name ? Environment.Classes[name] : Standard.any;
+            Type parent = node.Parent is TypeNode name ? Environment.Classes[name] : Standard.Any;
             type.Parent = parent;
         });
         CheckCycles(program.Classes, from data in nodes select data.type);
@@ -300,10 +308,10 @@ public class TypeChecker : EnvironmentVisitor<object?>
     private void InitializeMember(Type type, MethodNode node) => error.Catch(node.Location, () =>
     {
         // Get return and parameter types
-        IType returnType = node.Return switch  
+        Type returnType = node.Return switch  
         {
             ITypeNode typeNode => new TypeVisitor(Environment).Visit(typeNode),
-            null => Standard.unit // Defaults to unit if type is unspecified
+            null => Standard.Unit // Defaults to unit if type is unspecified
         };
 
         // Check operator cases
@@ -331,13 +339,13 @@ public class TypeChecker : EnvironmentVisitor<object?>
         {
             Access = node.Access,
             Parameters = InitializeParameters(node.Parameters),
-            Return = Standard.unit
+            Return = Standard.Unit
         });
 
-    private IType[] InitializeParameters(ParameterNode[] parameters)
+    private Type[] InitializeParameters(ParameterNode[] parameters)
     {
         TypeVisitor visitor = new TypeVisitor(Environment);
-        IEnumerable<IType> types =
+        IEnumerable<Type> types =
             from parameter in parameters
             select visitor.Visit(parameter.Type);
 
@@ -349,7 +357,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
         Field field = This.Fields[node.Identifier];
         if (node.Expression is IExpressionNode expression)
         {
-            IType? type = new ExpressionVisitor(Environment).Visit(expression);
+            Type type = new ExpressionVisitor(Environment).Visit(expression);
             Environment.Test(field.Type, type);
         }
     });
@@ -360,7 +368,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
         CheckOverride(method, node);
 
         // Check control flow
-        if (method.Return != Standard.unit && !new ControlVisitor().Visit(node.Body))
+        if (method.Return != Standard.Unit && !new ControlVisitor().Visit(node.Body))
             throw new EnlynError("Method does not always return a value");
 
         Environment.Enter();
@@ -392,14 +400,14 @@ public class TypeChecker : EnvironmentVisitor<object?>
             throw new EnlynError("Invalid number of parameters");
 
         // Overridden parameters can be more generic
-        foreach ((IType m, IType p) in method.Parameters.Zip(previous.Parameters)) Environment.Test(m, p);
+        foreach ((Type m, Type p) in method.Parameters.Zip(previous.Parameters)) Environment.Test(m, p);
         Environment.Test(previous.Return, method.Return); // Return type must be more specific
     }
 
     public override object? Visit(ConstructorNode node) => error.Catch(node.Location, () =>
     {
         Environment.Enter();
-        Return = Standard.unit;
+        Return = Standard.Unit;
 
         foreach (ParameterNode parameter in node.Parameters) Visit(parameter);
 
@@ -449,42 +457,44 @@ internal class ControlVisitor : ASTVisitor<bool>
 
 }
 
-internal class TypeVisitor : EnvironmentVisitor<IType>
+internal class TypeVisitor : EnvironmentVisitor<Type>
 {
 
     public TypeVisitor(Environment environment) : base(environment) { }
 
 
-    public override IType Visit(TypeNode node) => Environment.Classes[node];
-    public override IType Visit(OptionNode node) => new Option { Type = Visit(node.Type) };
+    public override Type Visit(TypeNode node) => Environment.Classes[node];
+    public override Type Visit(OptionNode node) => new Option { Type = Visit(node.Type) };
 
 }
 
-internal class ExpressionVisitor : EnvironmentVisitor<IType?>
+internal class ExpressionVisitor : EnvironmentVisitor<Type>
 {
 
     public ExpressionVisitor(Environment environment) : base(environment) { }
 
 
-    public override IType Visit(AccessNode node)
+    public override Type Visit(AccessNode node)
     {
-        if (Visit(node.Target) is not Type expression) throw new EnlynError("Cannot access from nullable type");
+        Type type = Visit(node.Target);
+        Field field = type.Fields.Get(node.Identifier, This);
 
-        Field field = expression.Fields.Get(node.Identifier, This);
         return field.Type;
     }
 
-    public override IType Visit(CallNode node)
+    public override Type Visit(CallNode node)
     {
         // Call target must be a method
-        if (node.Target is not AccessNode target || Visit(target.Target) is not Type expression)
+        if (node.Target is not AccessNode target)
             throw new EnlynError("Invalid call target");
 
-        Method method = expression.Methods.Get(target.Identifier, This);
+        Type type = Visit(target.Target);
+        Method method = type.Methods.Get(target.Identifier, This);
+
         return CheckSignature(method, node.Arguments);
     }
 
-    public override IType Visit(NewNode node)
+    public override Type Visit(NewNode node)
     {
         Type type = Environment.Classes[node.Type];
         Method method = type.Methods.Get(Environment.constructor, This);
@@ -492,82 +502,81 @@ internal class ExpressionVisitor : EnvironmentVisitor<IType?>
         return CheckSignature(method, node.Arguments);
     }
 
-    public IType CheckSignature(Method method, IExpressionNode[] arguments)
+    public Type CheckSignature(Method method, IExpressionNode[] arguments)
     {
         // Test if arguments match signature types
         if (method.Parameters.Length != arguments.Length) throw new EnlynError("Invalid number of arguments");
-        foreach ((IType expected, IExpressionNode argument) in method.Parameters.Zip(arguments))
+        foreach ((Type expected, IExpressionNode argument) in method.Parameters.Zip(arguments))
         {
-            IType? type = Visit(argument);
+            Type type = Visit(argument);
             Environment.Test(expected, type);
         }
 
         return method.Return;
     }
 
-    public override IType Visit(AssertNode node) => Visit(node.Expression) switch
+    public override Type Visit(AssertNode node) => Visit(node.Expression) switch
     {
         Option option => option.Type,
         _ => throw new EnlynError("Invalid assertion target")
     };
 
-    public override IType Visit(AssignNode node)
+    public override Type Visit(AssignNode node)
     {
-        IType expected = node.Target switch
+        Type expected = node.Target switch
         {
             IdentifierNode or AccessNode => Visit(node.Target)!,
             _ => throw new EnlynError("Invalid assignment target")
         };
-        IType? type = Visit(node.Expression);
+        Type type = Visit(node.Expression);
 
         Environment.Test(expected, type);
         return expected;
     }
 
-    public override IType Visit(InstanceNode node)
+    public override Type Visit(InstanceNode node)
     {
         TestInstance(node.Expression, node.Type);
-        return Standard.boolean;
+        return Standard.Boolean;
     }
 
-    public override IType Visit(CastNode node) => TestInstance(node.Expression, node.Type);
-    private IType TestInstance(IExpressionNode expression, ITypeNode type)
+    public override Type Visit(CastNode node) => TestInstance(node.Expression, node.Type);
+    private Type TestInstance(IExpressionNode expression, ITypeNode type)
     {
-        IType? target = Visit(expression);
-        IType result = new TypeVisitor(Environment).Visit(type);
+        Type target = Visit(expression);
+        Type result = new TypeVisitor(Environment).Visit(type);
 
-        if (target is null) throw new EnlynError("Null literal has no type");
-        Environment.Test(target, result); // Result should be more specific
-
+        // Result should be more specific
+        Environment.Test(target, result);
         return result;
     }
 
-    public override IType Visit(BinaryNode node)
+    public override Type Visit(BinaryNode node)
     {
-        if (Visit(node.Left) is not Type left) throw new EnlynError("Left operand cannot be null");
+        Type left = Visit(node.Left);
         BinaryIdentifierNode identifier = new() { Operation = node.Operation };
 
         Method method = left.Methods.Get(identifier, This);
         return CheckSignature(method, new IExpressionNode[] { node.Right });
     }
 
-    public override IType Visit(UnaryNode node)
+    public override Type Visit(UnaryNode node)
     {
-        if (Visit(node.Expression) is not Type expression) throw new EnlynError("Unary operand cannot be null");
+        Type expression = Visit(node.Expression);
         UnaryIdentifierNode identifier = new() { Operation = node.Operation };
 
         Method method = expression.Methods.Get(identifier, This);
         return CheckSignature(method, new IExpressionNode[0]);
     }
 
-    public override IType Visit(IdentifierNode node) => Environment[node];
+    public override Type Visit(IdentifierNode node) => Environment[node];
 
-    public override IType Visit(NumberNode node) => Standard.number;
-    public override IType Visit(StringNode node) => Standard.strType;
-    public override IType Visit(BooleanNode _) => Standard.boolean;
+    public override Type Visit(NumberNode node) => Standard.Number;
+    public override Type Visit(StringNode node) => Standard.String;
+    public override Type Visit(BooleanNode _) => Standard.Boolean;
 
-    public override IType Visit(ThisNode _) => This;
-    public override IType? Visit(BaseNode _) => This.Parent;
-    public override IType? Visit(NullNode _) => null;
+    public override Type Visit(ThisNode _) => This;
+    public override Type Visit(BaseNode _) => This.Parent!;
+    public override Type Visit(NullNode _) => Standard.Null;
 
 }
