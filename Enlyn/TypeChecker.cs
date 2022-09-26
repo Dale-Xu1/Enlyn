@@ -124,6 +124,11 @@ internal static class Standard
 
     static Standard()
     {
+        Method equality = new() // TODO: Add operators to standard library
+        {
+            Access = Access.Public
+        };
+
         any.Methods[Environment.constructor] = new Method
         {
             Access = Access.Public,
@@ -153,7 +158,7 @@ public class Environment
         if (expected is Option option) switch (target) // Null case falls through
         {
             case Option t: Test(option.Type, t.Type); break;
-            default: Test(option.Type, target); break;
+            case Type: Test(option.Type, target); break;
         }
         else if (expected is Type type) switch (target)
         {
@@ -537,8 +542,23 @@ internal class ExpressionVisitor : EnvironmentVisitor<IType?>
         return result;
     }
 
-    public override IType Visit(BinaryNode node) => default!;
-    public override IType Visit(UnaryNode node) => default!;
+    public override IType Visit(BinaryNode node)
+    {
+        if (Visit(node.Left) is not Type left) throw new EnlynError("Left operand cannot be null");
+        BinaryIdentifierNode identifier = new() { Operation = node.Operation };
+
+        Method method = left.Methods.Get(identifier, This);
+        return CheckSignature(method, new IExpressionNode[] { node.Right });
+    }
+
+    public override IType Visit(UnaryNode node)
+    {
+        if (Visit(node.Expression) is not Type expression) throw new EnlynError("Unary operand cannot be null");
+        UnaryIdentifierNode identifier = new() { Operation = node.Operation };
+
+        Method method = expression.Methods.Get(identifier, This);
+        return CheckSignature(method, new IExpressionNode[0]);
+    }
 
     public override IType Visit(IdentifierNode node) => Environment[node];
 
