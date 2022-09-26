@@ -497,12 +497,32 @@ public class TypeChecker : EnvironmentVisitor<object?>
 
     public override object? Visit(IfNode node) => error.Catch(node.Location, () =>
     {
+        // Condition must be a boolean
+        Type type = new ExpressionVisitor(Environment).Visit(node.Condition);
+        Environment.Test(Standard.Boolean, type);
 
+        // Enter new scopes for branches
+        Environment.Enter();
+        Visit(node.Then);
+        Environment.Exit();
+
+        if (node.Else is not null)
+        {
+            Environment.Enter();
+            Visit(node.Else);
+            Environment.Exit();
+        }
     });
 
     public override object? Visit(WhileNode node) => error.Catch(node.Location, () =>
     {
+        // Condition must be a boolean
+        Type type = new ExpressionVisitor(Environment).Visit(node.Condition);
+        Environment.Test(Standard.Boolean, type);
 
+        Environment.Enter();
+        Visit(node.Body);
+        Environment.Exit();
     });
 
     public override object? Visit(ReturnNode node) => error.Catch(node.Location, () =>

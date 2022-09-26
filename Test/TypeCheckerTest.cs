@@ -341,4 +341,45 @@ public class TypeCheckerTest
         Assert.AreEqual("Type number is not compatible with boolean", error.Errors[0].Message);
     }
 
+    [TestMethod]
+    public void TestIfAndWhile()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class Main : any",
+            "{",
+            "    public new() : base()",
+            "    {",
+            "        if true & false | true",
+            "        {",
+            "            let a = true",
+            "            while a do return",
+            "        }",
+            "        else if false { }",
+            "    }",
+            "}");
+
+        ErrorLogger error = CheckProgram(input);
+        Assert.AreEqual(0, error.Errors.Count);
+    }
+
+    [TestMethod]
+    public void TestConditionFail()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class Main : any",
+            "{",
+            "    public new() : base()",
+            "    {",
+            "        if 5 then return",
+            "        else if false { }",
+            "        while null do 5",
+            "    }",
+            "}");
+        ErrorLogger error = CheckProgram(input);
+
+        Assert.AreEqual(2, error.Errors.Count);
+        Assert.AreEqual("Type number is not compatible with boolean", error.Errors[0].Message);
+        Assert.AreEqual("Type boolean is not an option", error.Errors[1].Message);
+    }
+
 }
