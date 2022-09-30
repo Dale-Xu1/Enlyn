@@ -9,27 +9,52 @@ public record struct LOAD(int index) : IOpcode;
 public record struct STORE(int index) : IOpcode;
 public record struct POP : IOpcode;
 
-public record struct NEW(int length) : IOpcode;
+public record struct NEW(int type) : IOpcode;
 public record struct GETF(int index) : IOpcode;
 public record struct SETF(int index) : IOpcode;
 
 public record struct JUMP(int ip) : IOpcode;
-public record struct CALL(int index) : IOpcode;
+public record struct CALL(string name) : IOpcode;
 public record struct RETURN : IOpcode;
+
+public class Construct
+{
+
+    public int Fields { get; init; }
+    public Dictionary<string, Chunk> Chunks { get; init; } = null!;
+
+}
 
 public class Instance
 {
 
+    public int Type { get; init; }
     public Instance?[] Fields { get; }
 
     public Instance(int length) => Fields = new Instance?[length];
 
 }
 
+public abstract class ValueInstance<T> : Instance
+{
+    public T Value { get; init; } = default!;
+    protected ValueInstance() : base(0) { }
+}
+
+public class NumberInstance : ValueInstance<int> { }
+public class StringInstance : ValueInstance<string> { }
+public class BooleanInstance : ValueInstance<bool> { }
+
 public class Executable
 {
 
-    public Chunk[] Chunks { get; init; } = null!;
+    public static Construct[] standard = new Construct[]
+    {
+
+    };
+
+
+    public Construct[] Constructs { get; init; } = null!;
     public Chunk Main { get; init; } = null!;
 
     public Instance[] Constants { get; init; } = null!;
