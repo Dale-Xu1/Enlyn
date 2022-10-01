@@ -197,13 +197,16 @@ internal static class Standard
             Parameters = new Type[0], Return = Number
         };
 
-        String.Fields[new IdentifierNode { Value = "length" }] =
-            new Field { Access = Access.Public, Type = Number };
+        String.Fields[new IdentifierNode { Value = "length" }] = new Field { Access = Access.Public, Type = Number };
+        String.Methods[Environment.constructor] = new Method
+        {
+            Access = Access.Public,
+            Parameters = new[] { String }, Return = Unit
+        };
         String.Methods[new BinaryIdentifierNode { Operation = Operation.Add }] = new Method
         {
             Access = Access.Public,
-            Parameters = new[] { String },
-            Return = String
+            Parameters = new[] { String }, Return = String
         };
 
         Boolean.Methods[new BinaryIdentifierNode { Operation = Operation.And }] = logical;
@@ -223,8 +226,7 @@ internal static class Standard
         io.Methods[new IdentifierNode { Value = "in" }] = new Method
         {
             Access = Access.Public,
-            Parameters = new Type[0],
-            Return = String
+            Parameters = new Type[0], Return = String
         };
     }
 
@@ -260,7 +262,7 @@ public class Environment
 
     public static void TestValue(Type type)
     {
-        if (type == Standard.Unit || type == Standard.Number || type == Standard.String || type == Standard.Boolean)
+        if (type == Standard.Unit || type == Standard.Number || type == Standard.Boolean)
             throw new EnlynError("Invalid value type");
     }
 

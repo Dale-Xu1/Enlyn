@@ -7,15 +7,16 @@ public class VirtualMachineTest
 
     private static VirtualMachine InitInterpreter(Chunk chunk, Instance[] constants) => new(new Executable()
     {
-        Constructs = Executable.standard.Concat(new Construct[]
+        Constructs = new Construct[]
         {
             new()
             {
+                Parent = 0,
                 Fields = 0,
                 Chunks = new() { ["main"] = chunk }
             }
-        }).ToArray(), Main = chunk,
-        Constants = new Instance[0]
+        }, Main = chunk,
+        Constants = constants
     });
 
 
@@ -26,13 +27,21 @@ public class VirtualMachineTest
         {
             Instructions = new IOpcode[]
             {
+                new ONE(),
+                new CONST(0),
+                new ADD(),
+                new PRINT(),
                 new NULL(),
                 new RETURN()
             },
             Locals = 0, Arguments = 0
         };
+        Instance[] constants = new Instance[]
+        {
+            new ValueInstance<int> { Value = 2 }
+        };
 
-        VirtualMachine interpreter = InitInterpreter(main, new Instance[0]);
+        VirtualMachine interpreter = InitInterpreter(main, constants);
         interpreter.Run();
     }
 
