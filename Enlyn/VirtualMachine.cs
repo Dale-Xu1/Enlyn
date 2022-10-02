@@ -45,16 +45,6 @@ public record struct RETURN : IOpcode;
 
 public record struct PRINT : IOpcode; // TODO: Replace with standard library
 
-public class Construct
-{
-
-    public int? Parent { get; init; }
-    public int Fields { get; init; }
-
-    public Dictionary<string, IChunk> Chunks { get; init; } = null!;
-
-}
-
 public class Instance
 {
 
@@ -172,11 +162,45 @@ public class Executable
 public interface IChunk { }
 public class NativeChunk : IChunk { public Func<Instance?[], Instance?> Function { get; init; } = null!; }
 
+public class Construct
+{
+
+    public int? Parent { get; init; }
+    public int Fields { get; init; }
+
+    public Dictionary<string, IChunk> Chunks { get; init; } = null!;
+
+}
+
 public class Chunk : IChunk
 {
 
     public IOpcode[] Instructions { get; init; } = null!;
     public int Locals { get; init; }
+
+}
+
+internal class Frame
+{
+
+    public Frame Parent { get; }
+
+    public Stack<Instance?> Stack { get; } = new();
+    public Instance?[] Variables { get; }
+
+    private readonly Chunk chunk;
+    public int ip = 0;
+
+
+    public Frame(Chunk chunk, Frame parent = null!)
+    {
+        Parent = parent;
+        Variables = new Instance[chunk.Locals];
+
+        this.chunk = chunk;
+    }
+
+    public IOpcode Next => chunk.Instructions[ip++];
 
 }
 
@@ -390,29 +414,5 @@ public class VirtualMachine
             _ => "instance"
         });
     }
-
-}
-
-internal class Frame
-{
-
-    public Frame Parent { get; }
-
-    public Stack<Instance?> Stack { get; } = new();
-    public Instance?[] Variables { get; }
-
-    private readonly Chunk chunk;
-    public int ip = 0;
-
-
-    public Frame(Chunk chunk, Frame parent = null!)
-    {
-        Parent = parent;
-        Variables = new Instance[chunk.Locals];
-
-        this.chunk = chunk;
-    }
-
-    public IOpcode Next => chunk.Instructions[ip++];
 
 }
