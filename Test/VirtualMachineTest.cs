@@ -7,7 +7,7 @@ public class VirtualMachineTest
 
     private static VirtualMachine InitInterpreter(Chunk chunk, Instance[] constants) => new(new Executable()
     {
-        Constructs = new Construct[]
+        Constructs = Executable.standard.Concat(new Construct[]
         {
             new()
             {
@@ -15,7 +15,7 @@ public class VirtualMachineTest
                 Fields = 0,
                 Chunks = new() { ["main"] = chunk }
             }
-        }, Main = chunk,
+        }).ToArray(), Main = chunk,
         Constants = constants
     });
 
@@ -28,17 +28,52 @@ public class VirtualMachineTest
             Instructions = new IOpcode[]
             {
                 new ONE(),
+                new CAST(1),
                 new CONST(0),
                 new ADD(),
                 new PRINT(),
                 new NULL(),
                 new RETURN()
             },
-            Locals = 0, Arguments = 0
+            Locals = 0
         };
-        Instance[] constants = new Instance[]
+        Instance[] constants =
         {
-            new ValueInstance<int> { Value = 2 }
+            new NumberInstance { Value = 2 }
+        };
+
+        var x = new NumberInstance { Value = 2 };
+        var y = new NumberInstance { Value = 2 };
+
+        Assert.AreEqual(true, x.Equals(y));
+
+        VirtualMachine interpreter = InitInterpreter(main, constants);
+        interpreter.Run();
+    }
+
+    [TestMethod]
+    public void TestCall()
+    {
+        Chunk main = new()
+        {
+            Instructions = new IOpcode[]
+            {
+                new CONST(0),
+                new CONST(1),
+                new CALL("binary +", 2),
+                new COPY(),
+                new GETF(0),
+                new PRINT(),
+                new PRINT(),
+                new NULL(),
+                new RETURN()
+            },
+            Locals = 0
+        };
+        Instance[] constants =
+        {
+            new StringInstance("Hello "),
+            new StringInstance("world"),
         };
 
         VirtualMachine interpreter = InitInterpreter(main, constants);

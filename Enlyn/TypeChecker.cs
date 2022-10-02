@@ -198,11 +198,6 @@ internal static class Standard
         };
 
         String.Fields[new IdentifierNode { Value = "length" }] = new Field { Access = Access.Public, Type = Number };
-        String.Methods[Environment.constructor] = new Method
-        {
-            Access = Access.Public,
-            Parameters = new[] { String }, Return = Unit
-        };
         String.Methods[new BinaryIdentifierNode { Operation = Operation.Add }] = new Method
         {
             Access = Access.Public,
@@ -262,7 +257,7 @@ public class Environment
 
     public static void TestValue(Type type)
     {
-        if (type == Standard.Unit || type == Standard.Number || type == Standard.Boolean)
+        if (type == Standard.Unit || type == Standard.Number || type == Standard.String || type == Standard.Boolean)
             throw new EnlynError("Invalid value type");
     }
 
