@@ -12,7 +12,6 @@ public class VirtualMachineTest
             new()
             {
                 Parent = 0,
-                Fields = 0,
                 Chunks = new() { ["main"] = chunk }
             }
         }).ToArray(), Main = chunk,

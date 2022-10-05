@@ -83,6 +83,9 @@ public class StringInstance : Instance
 
 }
 
+// TODO: Field initializers without constructor?
+// TODO: base method calls?
+
 public class Executable
 {
 
@@ -233,7 +236,7 @@ public class VirtualMachine
     private void Handle(COPY _) => frame.Stack.Push(frame.Stack.Peek());
 
     private void Handle(ZERO _) => frame.Stack.Push(new NumberInstance { Value = 0 });
-    private void Handle(ONE _) => frame.Stack.Push(new NumberInstance { Value = 0 });
+    private void Handle(ONE _) => frame.Stack.Push(new NumberInstance { Value = 1 });
     
     private void Handle(TRUE _) => frame.Stack.Push(new BooleanInstance { Value = true });
     private void Handle(FALSE _) => frame.Stack.Push(new BooleanInstance { Value = false });
