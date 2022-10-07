@@ -248,7 +248,7 @@ public class TypeCheckerTest
     public void TestCall()
     {
         string input = string.Join(Environment.NewLine,
-            "class A : unit",
+            "class A",
             "{",
             "    private z : unit",
             "    public f(a : number) = this.g(a)",
@@ -264,7 +264,7 @@ public class TypeCheckerTest
     public void TestAssertAndCast()
     {
         string input = string.Join(Environment.NewLine,
-            "class A : unit",
+            "class A",
             "{",
             "    private a : unit = null!",
             "    private b : number?",
@@ -284,7 +284,7 @@ public class TypeCheckerTest
     public void TestOperators()
     {
         string input = string.Join(Environment.NewLine,
-            "class A : unit",
+            "class A",
             "{",
             "    private a : number = 1 + 2",
             "    private b : boolean = true & \"hi\"",
@@ -303,7 +303,7 @@ public class TypeCheckerTest
     public void TestReturn()
     {
         string input = string.Join(Environment.NewLine,
-            "class A : unit",
+            "class A",
             "{",
             "    public f() = return",
             "    public g() -> number",

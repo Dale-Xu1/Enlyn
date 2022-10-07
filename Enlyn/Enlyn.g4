@@ -57,7 +57,7 @@ expr
     | left = expr op = '|'                       right = expr  # binary
 
     | <assoc = right> target = expr '=' value = expr           # assign
-    | expr IS type                                             # instance
+    | expr IS (type | NULL)                                    # instance
     | expr AS type                                             # cast
 
     | value = IDENTIFIER                                       # identifier

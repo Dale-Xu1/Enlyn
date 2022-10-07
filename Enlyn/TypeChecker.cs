@@ -3,7 +3,7 @@ namespace Enlyn;
 public class Map<K, V> : Dictionary<K, V> where K : notnull
 {
 
-    public Map<K, V>? Parent { get; protected set; }
+    public Map<K, V>? Parent { get; internal set; }
 
     public Map(Map<K, V> parent) => Parent = parent;
     public Map() { }
@@ -32,7 +32,6 @@ public class Map<K, V> : Dictionary<K, V> where K : notnull
 public class MemberMap<K, V> : Map<K, V> where K : notnull where V : IMember
 {
 
-    internal new MemberMap<K, V> Parent { set => base.Parent = value; }
     private readonly Type type;
 
     public MemberMap(Type type) => this.type = type;
@@ -82,10 +81,9 @@ public class Type
         internal set
         {
             parent = value;
-            if (parent is null) return;
 
-            Fields.Parent = parent.Fields;
-            Methods.Parent = parent.Methods;
+            Fields.Parent = parent!.Fields;
+            Methods.Parent = parent!.Methods;
         }
     }
 
@@ -272,6 +270,9 @@ public class Environment
         set => scope[name] = value;
     }
 
+    public Type This { get; set; } = null!;
+    public Type Return { get; set; } = null!;
+
     public void Enter() => scope = new Map<IdentifierNode, Type>(scope);
     public void Exit() => scope = scope.Parent!;
 
@@ -283,21 +284,6 @@ public abstract class EnvironmentVisitor<T> : ASTVisitor<T>
     public Environment Environment { get; }
 
     protected EnvironmentVisitor(Environment environment) => Environment = environment;
-
-
-    private static readonly IdentifierNode current = new() { Value = "this" };
-    protected Type This
-    {
-        get => Environment[current];
-        set => Environment[current] = value;
-    }
-
-    private static readonly IdentifierNode method = new() { Value = "return" };
-    protected Type Return
-    {
-        get => Environment[method];
-        set => Environment[method] = value;
-    }
 
 }
 
@@ -340,7 +326,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
         foreach ((ClassNode node, Type type) in nodes)
         {
             Environment.Enter();
-            This = type;
+            Environment.This = type;
 
             foreach (IMemberNode member in node.Members) Visit(member);
             Environment.Exit();
@@ -429,7 +415,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
 
     public override object? Visit(FieldNode node) => error.Catch(node.Location, () =>
     {
-        Field field = This.Fields[node.Identifier];
+        Field field = Environment.This.Fields[node.Identifier];
         if (node.Expression is IExpressionNode expression)
         {
             Type type = new ExpressionVisitor(Environment).Visit(expression);
@@ -439,7 +425,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
 
     public override object? Visit(MethodNode node) => error.Catch(node.Location, () =>
     {
-        Method method = This.Methods[node.Identifier];
+        Method method = Environment.This.Methods[node.Identifier];
         CheckOverride(method, node);
 
         // Check control flow
@@ -447,7 +433,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
             throw new EnlynError("Method does not always return a value");
 
         Environment.Enter();
-        Return = method.Return;
+        Environment.Return = method.Return;
 
         foreach (ParameterNode parameter in node.Parameters) Visit(parameter);
         Visit(node.Body);
@@ -458,7 +444,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
     private void CheckOverride(Method method, MethodNode node)
     {
         // Test if parent has a method by the same name
-        Type parent = This.Parent!;
+        Type parent = Environment.This.Parent!;
         if (!parent.Methods.Exists(node.Identifier))
         {
             if (node.Override) throw new EnlynError($"No method {node.Identifier} found to override");
@@ -482,15 +468,17 @@ public class TypeChecker : EnvironmentVisitor<object?>
     public override object? Visit(ConstructorNode node) => error.Catch(node.Location, () =>
     {
         Environment.Enter();
-        Return = Standard.Unit;
+        Environment.Return = Standard.Unit;
 
         foreach (ParameterNode parameter in node.Parameters) Visit(parameter);
 
         // Check base call
-        Method parent = This.Parent!.Methods.Get(Environment.constructor, This);
-        new ExpressionVisitor(Environment).CheckSignature(parent, node.Arguments);
+        Type parent = Environment.This.Parent!;
+        Method method = parent.Methods.Get(Environment.constructor, Environment.This);
 
+        new ExpressionVisitor(Environment).CheckSignature(method, node.Arguments);
         Visit(node.Body);
+
         Environment.Exit();
     });
 
@@ -550,7 +538,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
     public override object? Visit(ReturnNode node) => error.Catch(node.Location, () =>
     {
         // Empty return value can only be used if method has no return type
-        if (Return == Standard.Unit)
+        if (Environment.Return == Standard.Unit)
         {
             if (node.Expression is null) return;
             throw new EnlynError("Method cannot return a value");
@@ -559,7 +547,7 @@ public class TypeChecker : EnvironmentVisitor<object?>
 
         // Verify expression type
         Type type = new ExpressionVisitor(Environment).Visit(node.Expression);
-        Environment.Test(Return, type);
+        Environment.Test(Environment.Return, type);
     });
 
     public override object? Visit(BlockNode node)
@@ -615,7 +603,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
     public override Type Visit(AccessNode node)
     {
         Type type = Visit(node.Target);
-        Field field = type.Fields.Get(node.Identifier, This);
+        Field field = type.Fields.Get(node.Identifier, Environment.This);
 
         return field.Type;
     }
@@ -626,7 +614,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
         if (node.Target is not AccessNode target) throw new EnlynError("Invalid call target");
 
         Type type = Visit(target.Target);
-        Method method = type.Methods.Get(target.Identifier, This);
+        Method method = type.Methods.Get(target.Identifier, Environment.This);
 
         return CheckSignature(method, node.Arguments);
     }
@@ -636,7 +624,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
         Type type = Environment.Classes[node.Type];
         Environment.TestValue(type);
 
-        Method method = type.Methods.Get(Environment.constructor, This);
+        Method method = type.Methods.Get(Environment.constructor, Environment.This);
         CheckSignature(method, node.Arguments);
 
         return type;
@@ -676,7 +664,9 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
 
     public override Type Visit(InstanceNode node)
     {
-        TestInstance(node.Expression, node.Type);
+        if (node.Type is null) Visit(node.Expression);
+        else TestInstance(node.Expression, node.Type);
+
         return Standard.Boolean;
     }
 
@@ -696,7 +686,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
         Type left = Visit(node.Left);
         BinaryIdentifierNode identifier = new() { Operation = node.Operation };
 
-        Method method = left.Methods.Get(identifier, This);
+        Method method = left.Methods.Get(identifier, Environment.This);
         return CheckSignature(method, new IExpressionNode[] { node.Right });
     }
 
@@ -705,7 +695,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
         Type expression = Visit(node.Expression);
         UnaryIdentifierNode identifier = new() { Operation = node.Operation };
 
-        Method method = expression.Methods.Get(identifier, This);
+        Method method = expression.Methods.Get(identifier, Environment.This);
         return CheckSignature(method, new IExpressionNode[0]);
     }
 
@@ -715,8 +705,8 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
     public override Type Visit(StringNode node) => Standard.String;
     public override Type Visit(BooleanNode _) => Standard.Boolean;
 
-    public override Type Visit(ThisNode _) => This;
-    public override Type Visit(BaseNode _) => This.Parent!;
+    public override Type Visit(ThisNode _) => Environment.This;
+    public override Type Visit(BaseNode _) => Environment.This.Parent!;
     public override Type Visit(NullNode _) => Standard.Null;
 
 }

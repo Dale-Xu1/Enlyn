@@ -40,7 +40,7 @@ public record struct SETF(int index) : IOpcode;
 public record struct JUMP(int ip) : IOpcode;
 public record struct JUMPF(int ip) : IOpcode;
 
-public record struct CALL(string name, int args) : IOpcode;
+public record struct CALL(int type, IIdentifierNode name) : IOpcode;
 public record struct RETURN : IOpcode;
 
 public record struct PRINT : IOpcode; // TODO: Replace with standard library
@@ -66,7 +66,7 @@ public abstract class ValueInstance<T> : Instance
 
 }
 
-public class NumberInstance : ValueInstance<int> { public NumberInstance() => Type = Executable.Number; }
+public class NumberInstance : ValueInstance<double> { public NumberInstance() => Type = Executable.Number; }
 public class BooleanInstance : ValueInstance<bool> { public BooleanInstance() => Type = Executable.Boolean; }
 public class StringInstance : Instance
 {
@@ -83,9 +83,6 @@ public class StringInstance : Instance
 
 }
 
-// TODO: Field initializers without constructor?
-// TODO: base method calls?
-
 public class Executable
 {
 
@@ -100,13 +97,15 @@ public class Executable
         {
             Chunks = new()
             {
-                ["new"] = new NativeChunk { Function = _ => null },
-                ["binary =="] = new NativeChunk
+                [new IdentifierNode { Value = "new" }] = new NativeChunk { Arguments = 1, Function = _ => null },
+                [new BinaryIdentifierNode { Operation = Operation.Eq }] = new NativeChunk
                 {
+                    Arguments = 2,
                     Function = args => new BooleanInstance { Value = args[0]!.Equals(args[1]) }
                 },
-                ["binary !="] = new NativeChunk
+                [new BinaryIdentifierNode { Operation = Operation.Neq }] = new NativeChunk
                 {
+                    Arguments = 2,
                     Function = args => new BooleanInstance { Value = !args[0]!.Equals(args[1]) }
                 }
             },
@@ -117,8 +116,9 @@ public class Executable
             Parent = Any,
             Chunks = new()
             {
-                ["binary +"] = new NativeChunk
+                [new BinaryIdentifierNode { Operation = Operation.Add }] = new NativeChunk
                 {
+                    Arguments = 2,
                     Function = args =>
                     {
                         var a = (StringInstance) args[0]!;
@@ -135,16 +135,18 @@ public class Executable
             Parent = Any,
             Chunks = new()
             {
-                ["out"] = new NativeChunk
+                [new IdentifierNode { Value = "out" }] = new NativeChunk
                 {
+                    Arguments = 2,
                     Function = args =>
                     {
                         // TODO: IO class
                         return null;
                     }
                 },
-                ["in"] = new NativeChunk
+                [new IdentifierNode { Value = "in" }] = new NativeChunk
                 {
+                    Arguments = 1,
                     Function = _ =>
                     {
                         return null;
@@ -162,16 +164,22 @@ public class Executable
 
 }
 
-public interface IChunk { }
-public class NativeChunk : IChunk { public Func<Instance?[], Instance?> Function { get; init; } = null!; }
-
 public class Construct
 {
 
     public int? Parent { get; init; }
     public int Fields { get; init; }
 
-    public Dictionary<string, IChunk> Chunks { get; init; } = null!;
+    public Dictionary<IIdentifierNode, IChunk> Chunks { get; init; } = null!;
+
+}
+
+public interface IChunk { public int Arguments { get; } }
+public class NativeChunk : IChunk
+{
+
+    public int Arguments { get; init; }
+    public Func<Instance?[], Instance?> Function { get; init; } = null!;
 
 }
 
@@ -179,6 +187,8 @@ public class Chunk : IChunk
 {
 
     public IOpcode[] Instructions { get; init; } = null!;
+
+    public int Arguments { get; init; }
     public int Locals { get; init; }
 
 }
@@ -259,15 +269,15 @@ public class VirtualMachine
     private void Handle(POP _) => frame.Stack.Pop();
 
 
-    private void HandleArithmetic(Func<int, int, int> handler)
+    private void HandleArithmetic(Func<double, double, double> handler)
     {
         var b = (NumberInstance) frame.Stack.Pop()!;
         var a = (NumberInstance) frame.Stack.Pop()!;
 
         frame.Stack.Push(new NumberInstance { Value = handler(a.Value, b.Value) });
     }
-    
-    private void HandleComparison(Func<int, int, bool> handler)
+
+    private void HandleComparison(Func<double, double, bool> handler)
     {
         var b = (NumberInstance) frame.Stack.Pop()!;
         var a = (NumberInstance) frame.Stack.Pop()!;
@@ -366,12 +376,12 @@ public class VirtualMachine
 
     private void Handle(CALL opcode)
     {
-        Instance?[] arguments = new Instance?[opcode.args];
-        for (int i = opcode.args - 1; i >= 0; i--) arguments[i] = frame.Stack.Pop();
+        IChunk chunk = GetChunk(opcode.type, opcode.name);
+
+        Instance?[] arguments = new Instance?[chunk.Arguments];
+        for (int i = chunk.Arguments - 1; i >= 0; i--) arguments[i] = frame.Stack.Pop();
 
         Instance instance = arguments[0]!;
-        IChunk chunk = GetChunk(instance.Type, opcode.name);
-
         if (chunk is NativeChunk native)
         {
             Instance? value = native.Function(arguments);
@@ -385,7 +395,7 @@ public class VirtualMachine
         for (int i = 0; i < arguments.Length; i++) frame.Variables[i] = arguments[i];
     }
 
-    private IChunk GetChunk(int type, string name)
+    private IChunk GetChunk(int type, IIdentifierNode name)
     {
         Construct construct = executable.Constructs[type];
         int? parent = construct.Parent;

@@ -135,7 +135,7 @@ public class AssignNode : IExpressionNode
 public class InstanceNode : IExpressionNode
 {
     public IExpressionNode Expression { get; init; } = null!;
-    public ITypeNode Type { get; init; } = null!;
+    public ITypeNode? Type { get; init; }
 }
 
 public class CastNode : IExpressionNode
@@ -460,11 +460,15 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         Expression = VisitExpr(context.value)
     };
 
-    public override InstanceNode VisitInstance(EnlynParser.InstanceContext context) => new()
+    public override InstanceNode VisitInstance(EnlynParser.InstanceContext context)
     {
-        Expression = VisitExpr(context.expr()),
-        Type = VisitType(context.type())
-    };
+        EnlynParser.TypeContext? type = context.type();
+        return new()
+        {
+            Expression = VisitExpr(context.expr()),
+            Type = type is null ? null : VisitType(type)
+        };
+    }
 
     public override CastNode VisitCast(EnlynParser.CastContext context) => new()
     {

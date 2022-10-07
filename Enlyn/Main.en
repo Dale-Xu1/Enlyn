@@ -7,5 +7,6 @@ class B : A
     {
         let a : A = new B()
         let x = a as B.x
+        let y : boolean = a is null
     }
 }
