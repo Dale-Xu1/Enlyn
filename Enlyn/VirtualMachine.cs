@@ -43,7 +43,7 @@ public record struct JUMPF(int ip) : IOpcode;
 public record struct CALL(int type, IIdentifierNode name) : IOpcode;
 public record struct RETURN : IOpcode;
 
-public record struct PRINT : IOpcode; // TODO: Replace with standard library
+public record struct PRINT : IOpcode; // TODO: Remove print opcode
 
 public class Instance
 {
@@ -90,6 +90,7 @@ public class Executable
     internal static int Number { get; } = 1;
     internal static int String { get; } = 2;
     internal static int Boolean { get; } = 3;
+    internal static int IO { get; } = 4;
 
     public static readonly Construct[] standard =
     {
@@ -140,17 +141,22 @@ public class Executable
                     Arguments = 2,
                     Function = args =>
                     {
-                        // TODO: IO class
+                        Console.WriteLine(args[1] switch
+                        {
+                            NumberInstance n => n.Value,
+                            BooleanInstance b => b.Value,
+                            StringInstance s => s.Value,
+
+                            null => "null",
+                            _ => "instance"
+                        });
                         return null;
                     }
                 },
                 [new IdentifierNode { Value = "in" }] = new NativeChunk
                 {
                     Arguments = 1,
-                    Function = _ =>
-                    {
-                        return null;
-                    }
+                    Function = _ => new StringInstance(Console.ReadLine() ?? "")
                 }
             }
         }
@@ -158,7 +164,7 @@ public class Executable
 
 
     public Construct[] Constructs { get; init; } = null!;
-    public Chunk Main { get; init; } = null!;
+    public int Main { get; init; }
 
     public Instance[] Constants { get; init; } = null!;
 
@@ -170,7 +176,7 @@ public class Construct
     public int? Parent { get; init; }
     public int Fields { get; init; }
 
-    public Dictionary<IIdentifierNode, IChunk> Chunks { get; init; } = null!;
+    public Dictionary<IIdentifierNode, IChunk> Chunks { get; init; } = new();
 
 }
 
@@ -227,7 +233,12 @@ public class VirtualMachine
     public VirtualMachine(Executable executable)
     {
         this.executable = executable;
-        frame = new Frame(executable.Main);
+
+        Construct construct = executable.Constructs[executable.Main];
+        Chunk chunk = (Chunk) construct.Chunks[Environment.constructor];
+
+        frame = new Frame(chunk);
+        frame.Variables[0] = new Instance(construct.Fields) { Type = executable.Main };
     }
 
     public void Run()

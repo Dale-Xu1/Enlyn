@@ -32,12 +32,14 @@ public class TypeCheckerTest
     }
 
 
+    private static readonly string program = "class Main { }";
+
     [TestMethod]
     public void TestClassRedefinition()
     {
         string input = string.Join(Environment.NewLine,
             "class A : any { }",
-            "class A { }");
+            "class A { }", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
@@ -51,7 +53,7 @@ public class TypeCheckerTest
             "class A : D { }",
             "class B : A { }",
             "class C : B { }",
-            "class D : C { }");
+            "class D : C { }", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
@@ -65,7 +67,7 @@ public class TypeCheckerTest
             "class A",
             "{",
             "    public x : any = 5",
-            "}");
+            "}", program);
             
         ErrorLogger error = new();
         TypeChecker checker = new(error);
@@ -89,7 +91,7 @@ public class TypeCheckerTest
             "class A",
             "{",
             "    private main(a : A, b : B) { }",
-            "}");
+            "}", program);
 
         ErrorLogger error = new();
         TypeChecker checker = new(error);
@@ -118,7 +120,7 @@ public class TypeCheckerTest
             "class A",
             "{",
             "    protected binary +(a : A, b : any) -> A { }",
-            "}");
+            "}", program);
 
         ErrorLogger error = new();
         TypeChecker checker = new(error);
@@ -141,7 +143,7 @@ public class TypeCheckerTest
             "    private w : number? = 5",
             "    protected y : number? = true",
             "    private z : string = null",
-            "}");
+            "}", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(3, error.Errors.Count);
@@ -157,7 +159,7 @@ public class TypeCheckerTest
             "class A",
             "{",
             "    public f(a : number, a : string) { }",
-            "}");
+            "}", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
@@ -178,7 +180,7 @@ public class TypeCheckerTest
             "    public override f(a : number) -> boolean = return true",
             "    public override g(x : string) -> boolean = return false",
             "    public override h(i : unit) -> unit = return",
-            "}");
+            "}", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(2, error.Errors.Count);
@@ -197,7 +199,7 @@ public class TypeCheckerTest
             "        if true then return 1",
             "        else return 2",
             "    }",
-            "}");
+            "}", program);
 
         ErrorLogger error = CheckProgram(input);
         Assert.AreEqual(0, error.Errors.Count);
@@ -214,7 +216,7 @@ public class TypeCheckerTest
             "        this.f()",
             "        while true do return 1",
             "    }",
-            "}");
+            "}", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
@@ -236,7 +238,7 @@ public class TypeCheckerTest
             "    public y : number = this.b",
             "    protected new() : base(5) { }",
             "    private z : unit",
-            "}");
+            "}", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(2, error.Errors.Count);
@@ -253,7 +255,7 @@ public class TypeCheckerTest
             "    private z : unit",
             "    public f(a : number) = this.g(a)",
             "    public g(x : any) = this.f(x)",
-            "}");
+            "}", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
@@ -272,7 +274,7 @@ public class TypeCheckerTest
             "    private d : number = this.b as number",
             "    private e : any = null as any",
             "    private f : boolean = this.e is string",
-            "}");
+            "}", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(2, error.Errors.Count);
@@ -291,7 +293,7 @@ public class TypeCheckerTest
             "    private c : boolean = \"\" == 5",
             "    private x : any? = null",
             "    private d : boolean = this.x == null",
-            "}");
+            "}", program);
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(2, error.Errors.Count);
@@ -303,8 +305,9 @@ public class TypeCheckerTest
     public void TestReturn()
     {
         string input = string.Join(Environment.NewLine,
-            "class A",
+            "class Main",
             "{",
+            "    public new() { }",
             "    public f() = return",
             "    public g() -> number",
             "    {",
@@ -325,6 +328,7 @@ public class TypeCheckerTest
         string input = string.Join(Environment.NewLine,
             "class Main",
             "{",
+            "    public new() { }",
             "    public f()",
             "    {",
             "        let x = null",
@@ -379,6 +383,37 @@ public class TypeCheckerTest
         Assert.AreEqual(2, error.Errors.Count);
         Assert.AreEqual("Type number is not compatible with boolean", error.Errors[0].Message);
         Assert.AreEqual("Type boolean is not an option", error.Errors[1].Message);
+    }
+
+    [TestMethod]
+    public void TestNullTest()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class Main : any",
+            "{",
+            "    public new() : base()",
+            "    {",
+            "        let a = 0",
+            "        let y : boolean = a is null",
+            "    }",
+            "}");
+
+        ErrorLogger error = CheckProgram(input);
+        Assert.AreEqual(0, error.Errors.Count);
+    }
+
+    [TestMethod]
+    public void TestMainConstructor()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class Main",
+            "{",
+            "    public new(a : number) = return",
+            "}");
+        ErrorLogger error = CheckProgram(input);
+
+        Assert.AreEqual(1, error.Errors.Count);
+        Assert.AreEqual("Main class constructor cannot have arguments", error.Errors[0].Message);
     }
 
     [TestMethod]

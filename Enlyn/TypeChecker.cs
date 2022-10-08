@@ -300,15 +300,13 @@ public class TypeChecker : EnvironmentVisitor<object?>
     {
         // Initialize type objects
         List<ClassData> nodes = new();
-        foreach (ClassNode node in program.Classes)
+        foreach (ClassNode node in program.Classes) error.Catch(node.Location, () =>
         {
             Type type = new() { Name = node.Identifier };
-            error.Catch(node.Location, () =>
-            {
-                Environment.Classes[node.Identifier] = type;
-                nodes.Add(new ClassData(node, type));
-            });
-        }
+
+            Environment.Classes[node.Identifier] = type;
+            nodes.Add(new ClassData(node, type));
+        });
 
         // Initialize parent graph and check for cycles
         foreach ((ClassNode node, Type type) in nodes) error.Catch(node.Location, () =>
@@ -332,7 +330,14 @@ public class TypeChecker : EnvironmentVisitor<object?>
             Environment.Exit();
         }
 
-        return null;
+        // Check for Main class
+        return error.Catch(program.Location, () =>
+        {
+            Type main = Environment.Classes[new TypeNode { Value = "Main" }];
+
+            Method method = main.Methods[Environment.constructor];
+            if (method.Parameters.Length > 0) throw new EnlynError("Main class constructor cannot have arguments");
+        });
     }
 
     private void CheckCycles(ClassNode[] nodes, IEnumerable<Type> types)

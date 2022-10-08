@@ -14,7 +14,7 @@ public class VirtualMachineTest
                 Parent = 0,
                 Chunks = new() { [new IdentifierNode { Value = "main" }] = chunk }
             }
-        }).ToArray(), Main = chunk,
+        }).ToArray(), Main = 5,
         Constants = constants
     });
 

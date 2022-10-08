@@ -8,7 +8,7 @@ using Environment = System.Environment;
 public class CompilerTest
 {
 
-    private static void Compile(string input)
+    private static Executable Compile(string input)
     {
         ErrorLogger error = new();
         TypeChecker checker = new(error);
@@ -26,7 +26,7 @@ public class CompilerTest
         Assert.AreEqual(0, error.Errors.Count);
 
         Compiler compiler = new(checker.Environment, error);
-        compiler.Visit(tree);
+        return compiler.Compile(tree);
     }
 
 
@@ -36,12 +36,17 @@ public class CompilerTest
         string input = string.Join(Environment.NewLine,
             "class Main : IO",
             "{",
-            "    public main()",
+            "    public new()",
             "    {",
-            "        this.out(\"Hello world\")",
+            "        let x = \"Hi\"",
+            "        this.out(x)",
             "    }",
             "}");
-        Compile(input);
+
+        Executable executable = Compile(input);
+        VirtualMachine interpreter = new(executable);
+
+        interpreter.Run();
     }
 
 }

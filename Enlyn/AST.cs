@@ -12,7 +12,7 @@ public struct Location
 public interface INode { }
 public abstract class LocationNode { public Location Location { get; init; } }
 
-public class ProgramNode : INode { public ClassNode[] Classes { get; init; } = null!; }
+public class ProgramNode : LocationNode, INode { public ClassNode[] Classes { get; init; } = null!; }
 public class ClassNode : LocationNode, INode
 {
     public TypeNode Identifier { get; init; }
@@ -284,8 +284,11 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
     }
 
 
-    public override ProgramNode VisitProgram(EnlynParser.ProgramContext context) =>
-        new() { Classes = VisitList<ClassNode>(context.classList()?.classDefinition()) };
+    public override ProgramNode VisitProgram(EnlynParser.ProgramContext context) => new()
+    {
+        Classes = VisitList<ClassNode>(context.classList()?.classDefinition()),
+        Location = GetLocation(context)
+    };
 
     public override ClassNode VisitClassDefinition(EnlynParser.ClassDefinitionContext context)
     {
