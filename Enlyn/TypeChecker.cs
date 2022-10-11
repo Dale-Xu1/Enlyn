@@ -263,6 +263,8 @@ public class Environment
     private Map<IdentifierNode, Type> scope = new();
     public Map<TypeNode, Type> Classes { get; } = Standard.Classes;
 
+    public Dictionary<IExpressionNode, Type> Types { get; } = new();
+
 
     public Type this[IdentifierNode name]
     {
@@ -296,7 +298,19 @@ public class TypeChecker : EnvironmentVisitor<object?>
 
 
     private record struct ClassData(ClassNode node, Type type);
-    public override object? Visit(ProgramNode program)
+    public override object? Visit(ProgramNode program) => error.Catch(program.Location, () =>
+    {
+        ClassData[] nodes = InitializeClasses(program);
+        VisitMembers(nodes);
+
+        // Check for Main class
+        Type main = Environment.Classes[new TypeNode { Value = "Main" }];
+
+        Method method = main.Methods[Environment.constructor];
+        if (method.Parameters.Length > 0) throw new EnlynError("Main class constructor cannot define arguments");
+    });
+
+    private ClassData[] InitializeClasses(ProgramNode program)
     {
         // Initialize type objects
         List<ClassData> nodes = new();
@@ -316,28 +330,9 @@ public class TypeChecker : EnvironmentVisitor<object?>
             Environment.TestValue(parent);
             type.Parent = parent;
         });
+
         CheckCycles(program.Classes, from data in nodes select data.type);
-
-        // Initialize and check members
-        foreach ((ClassNode node, Type type) in nodes) foreach (IMemberNode member in node.Members)
-            InitializeMember(type, (dynamic) member);
-        foreach ((ClassNode node, Type type) in nodes)
-        {
-            Environment.Enter();
-            Environment.This = type;
-
-            foreach (IMemberNode member in node.Members) Visit(member);
-            Environment.Exit();
-        }
-
-        // Check for Main class
-        return error.Catch(program.Location, () =>
-        {
-            Type main = Environment.Classes[new TypeNode { Value = "Main" }];
-
-            Method method = main.Methods[Environment.constructor];
-            if (method.Parameters.Length > 0) throw new EnlynError("Main class constructor cannot have arguments");
-        });
+        return nodes.ToArray();
     }
 
     private void CheckCycles(ClassNode[] nodes, IEnumerable<Type> types)
@@ -361,6 +356,21 @@ public class TypeChecker : EnvironmentVisitor<object?>
                 error.Report($"Cyclic inheritance found at {parent.Name}", node.Location);
                 return;
             }
+        }
+    }
+
+    private void VisitMembers(ClassData[] nodes)
+    {
+        // Initialize and check members
+        foreach ((ClassNode node, Type type) in nodes) foreach (IMemberNode member in node.Members)
+            InitializeMember(type, (dynamic) member);
+        foreach ((ClassNode node, Type type) in nodes)
+        {
+            Environment.Enter();
+            Environment.This = type;
+
+            foreach (IMemberNode member in node.Members) Visit(member);
+            Environment.Exit();
         }
     }
 
@@ -478,12 +488,15 @@ public class TypeChecker : EnvironmentVisitor<object?>
         foreach (ParameterNode parameter in node.Parameters) Visit(parameter);
 
         // Check base call
-        Type parent = Environment.This.Parent!;
-        Method method = parent.Methods.Get(Environment.constructor, Environment.This);
+        if (node.Arguments is not null)
+        {
+            Type parent = Environment.This.Parent!;
+            Method method = parent.Methods.Get(Environment.constructor, Environment.This);
 
-        new ExpressionVisitor(Environment).CheckSignature(method, node.Arguments);
+            new ExpressionVisitor(Environment).CheckSignature(method, node.Arguments);
+        }
+
         Visit(node.Body);
-
         Environment.Exit();
     });
 
@@ -610,6 +623,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
         Type type = Visit(node.Target);
         Field field = type.Fields.Get(node.Identifier, Environment.This);
 
+        Environment.Types[node] = type;
         return field.Type;
     }
 
@@ -618,9 +632,14 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
         // Call target must be a method
         if (node.Target is not AccessNode target) throw new EnlynError("Invalid call target");
 
-        Type type = Visit(target.Target);
+        Type type = target.Target switch
+        {
+            BaseNode parent => Environment.This.Parent!,
+            _ => Visit(target.Target)
+        };
         Method method = type.Methods.Get(target.Identifier, Environment.This);
 
+        Environment.Types[node] = type;
         return CheckSignature(method, node.Arguments);
     }
 
@@ -689,18 +708,22 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
     public override Type Visit(BinaryNode node)
     {
         Type left = Visit(node.Left);
-        BinaryIdentifierNode identifier = new() { Operation = node.Operation };
 
+        BinaryIdentifierNode identifier = new() { Operation = node.Operation };
         Method method = left.Methods.Get(identifier, Environment.This);
+
+        Environment.Types[node] = left;
         return CheckSignature(method, new IExpressionNode[] { node.Right });
     }
 
     public override Type Visit(UnaryNode node)
     {
         Type expression = Visit(node.Expression);
-        UnaryIdentifierNode identifier = new() { Operation = node.Operation };
 
+        UnaryIdentifierNode identifier = new() { Operation = node.Operation };
         Method method = expression.Methods.Get(identifier, Environment.This);
+
+        Environment.Types[node] = expression;
         return CheckSignature(method, new IExpressionNode[0]);
     }
 
@@ -711,7 +734,7 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
     public override Type Visit(BooleanNode _) => Standard.Boolean;
 
     public override Type Visit(ThisNode _) => Environment.This;
-    public override Type Visit(BaseNode _) => Environment.This.Parent!;
+    public override Type Visit(BaseNode _) => throw new EnlynError("Invalid use of base");
     public override Type Visit(NullNode _) => Standard.Null;
 
 }

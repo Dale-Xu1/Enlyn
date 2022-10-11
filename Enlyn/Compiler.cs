@@ -37,6 +37,8 @@ public class CConstruct
     public Map<IdentifierNode, int> Fields { get; } = new();
     public Map<IIdentifierNode, CChunk> Chunks { get; } = new();
 
+    public ClassNode Node { get; init; } = null!;
+
 
     private CConstruct? parent;
     public CConstruct? Parent
@@ -59,9 +61,30 @@ public class CConstruct
         return new()
         {
             Parent = parent!.Index,
-            Fields = Fields.Count,
+            Fields = fieldCount,
             Chunks = chunks
         };
+    }
+
+    private int CountFields()
+    {
+        if (Standard) return Fields.Count;
+
+        int fields = parent?.CountFields() ?? 0;
+        foreach (IMemberNode member in Node.Members) if (member is FieldNode) fields++;
+
+        return fields;
+    }
+
+    private int fieldCount;
+    public void InitializeFields()
+    {
+        fieldCount = CountFields();
+        int offset = fieldCount;
+        foreach (IMemberNode member in Node.Members) if (member is FieldNode) offset--;
+
+        foreach (IMemberNode member in Node.Members) if (member is FieldNode field)
+            Fields[field.Identifier] = offset++;
     }
 
 }
@@ -74,7 +97,7 @@ public class CChunk
 
     public int Arguments { get; set; }
 
-    private int locals;
+    private int locals = 0;
 
     private int offset = 0;
     private readonly Stack<int> offsetStack = new();
@@ -82,7 +105,7 @@ public class CChunk
 
     public void Emit(IOpcode opcode) => Instructions.Add(opcode);
 
-    public void AddThis() { offset++; locals = 1; }
+    public void AddThis() { offset++; locals++; }
     public int AddVariable(IdentifierNode node)
     {
         Scope[node] = offset++;
@@ -143,12 +166,12 @@ public class Compiler : ASTVisitor<object?>
     public Executable Compile(ProgramNode program)
     {
         Visit(program);
-        List<Construct> cList = new();
-        foreach (CConstruct c in constructs.Values) if (!c.Standard) cList.Add(c.ToConstruct());
+        List<Construct> list = new();
+        foreach (CConstruct c in constructs.Values) if (!c.Standard) list.Add(c.ToConstruct());
 
         return new()
         {
-            Constructs = Executable.standard.Concat(cList).ToArray(),
+            Constructs = Executable.standard.Concat(list).ToArray(),
             Main = constructs[new TypeNode { Value = "Main" }].Index,
             Constants = constants.ToArray()
         };
@@ -157,13 +180,19 @@ public class Compiler : ASTVisitor<object?>
     public override object? Visit(ProgramNode program)
     {
         foreach (ClassNode node in program.Classes)
-            constructs[node.Identifier] = new CConstruct { Index = typeIndex++ };
+            constructs[node.Identifier] = new CConstruct { Index = typeIndex++, Node = node };
+
+        List<CConstruct> localConstructs = new();
         foreach (ClassNode node in program.Classes)
         {
+            CConstruct current = constructs[node.Identifier];
             CConstruct parent = node.Parent is TypeNode name ? constructs[name] : CStandard.Any;
-            constructs[node.Identifier].Parent = parent;
+            current.Parent = parent;
+
+            localConstructs.Add(current);
         }
 
+        foreach (CConstruct construct in localConstructs) construct.InitializeFields();
         foreach (ClassNode node in program.Classes) Visit(node);
         return null;
     }
@@ -183,28 +212,35 @@ public class Compiler : ASTVisitor<object?>
 
         currentConstruct = constructs[node.Identifier];
 
-        Visit(constructor, fields.ToArray());
+        Visit(fields.ToArray());
+        if (constructor is not null) Visit(constructor);
         foreach (MethodNode method in methods) Visit(method);
 
         return null;
     }
 
-    private void Visit(ConstructorNode? node, FieldNode[] fields)
+    public static IdentifierNode fieldInit = new() { Value = "null" };
+    private void Visit(FieldNode[] fields)
     {
-        CChunk chunk = node is null ? new() { Arguments = 1 } : new() { Arguments = node.Parameters.Length + 1 };
-        currentConstruct.Chunks[Environment.constructor] = chunk;
+        CChunk chunk = new() { Arguments = 1 };
+        currentConstruct.Chunks[fieldInit] = chunk;
         currentChunk = chunk;
 
         chunk.AddThis();
 
-        if (node is null)
+        // Base call
+        currentChunk.Emit(new LOAD(0));
+        currentChunk.Emit(new INVOKE(currentConstruct.Parent!.Index, fieldInit));
+        currentChunk.Emit(new POP());
+
+        foreach (FieldNode field in fields)
         {
-            // TODO: Generate base call
+            if (field.Expression is null) continue;
+
+            chunk.Emit(new LOAD(0));
+            Visit(field.Expression);
+            chunk.Emit(new SETF(currentConstruct.Fields[field.Identifier]));
         }
-        else foreach (ParameterNode param in node.Parameters) chunk.AddVariable(param.Identifier);
-        
-        // TODO: Emit field initializers
-        if (node is not null) Visit(node.Body);
 
         chunk.Emit(new NULL());
         chunk.Emit(new RETURN());
@@ -220,6 +256,32 @@ public class Compiler : ASTVisitor<object?>
         foreach (ParameterNode param in node.Parameters) chunk.AddVariable(param.Identifier);
 
         Visit(node.Body);
+        chunk.Emit(new NULL());
+        chunk.Emit(new RETURN());
+
+        return null;
+    }
+
+    public override object? Visit(ConstructorNode node)
+    {
+        CChunk chunk = new() { Arguments = node.Parameters.Length + 1 };
+        currentConstruct.Chunks[Environment.constructor] = chunk;
+        currentChunk = chunk;
+
+        chunk.AddThis();
+        foreach (ParameterNode param in node.Parameters) chunk.AddVariable(param.Identifier);
+
+        // Base call
+        if (node.Arguments is not null)
+        {
+            currentChunk.Emit(new LOAD(0));
+            foreach (IExpressionNode expression in node.Arguments) Visit(expression);
+            currentChunk.Emit(new INVOKE(currentConstruct.Parent!.Index, Environment.constructor));
+            currentChunk.Emit(new POP());
+        }
+
+        Visit(node.Body);
+
         chunk.Emit(new NULL());
         chunk.Emit(new RETURN());
 
@@ -258,13 +320,23 @@ public class Compiler : ASTVisitor<object?>
     }
 
 
+    public override object? Visit(AccessNode node)
+    {
+        Visit(node.Target);
+
+        int i = constructs[Environment.Types[node].Name].Fields[node.Identifier];
+        currentChunk.Emit(new GETF(i));
+        return null;
+    }
+
     public override object? Visit(CallNode node)
     {
         AccessNode access = (AccessNode) node.Target;
         Visit(access.Target);
         foreach (IExpressionNode expression in node.Arguments) Visit(expression);
 
-        currentChunk.Emit(new CALL(5, access.Identifier)); // TODO: Store call type information in type checker
+        int i = constructs[Environment.Types[node].Name].Index;
+        currentChunk.Emit(new VIRTUAL(i, access.Identifier));
         return null;
     }
 
@@ -272,9 +344,16 @@ public class Compiler : ASTVisitor<object?>
     {
         int i = constructs[node.Type].Index;
         currentChunk.Emit(new NEW(i));
-        foreach (IExpressionNode expression in node.Arguments) Visit(expression);
 
-        currentChunk.Emit(new CALL(i, Environment.constructor));
+        currentChunk.Emit(new COPY());
+        currentChunk.Emit(new INVOKE(i, fieldInit));
+        currentChunk.Emit(new POP());
+        
+        currentChunk.Emit(new COPY());
+
+        foreach (IExpressionNode expression in node.Arguments) Visit(expression);
+        currentChunk.Emit(new INVOKE(i, Environment.constructor));
+        currentChunk.Emit(new POP());
         return null;
     }
 

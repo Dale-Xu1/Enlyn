@@ -171,9 +171,9 @@ public class ParserTest
         ParseTreeVisitor visitor = new("Test");
 
         ConstructorNode constructor = visitor.VisitConstructor((EnlynParser.ConstructorContext) parser.member());
-        
+
         Assert.AreEqual(0, constructor.Parameters.Length);
-        Assert.AreEqual(1, constructor.Arguments.Length);
+        Assert.AreEqual(1, constructor.Arguments!.Length);
 
         Assert.AreEqual(true, ((BooleanNode) constructor.Arguments[0]).Value);
     }

@@ -59,7 +59,7 @@ public class VirtualMachineTest
             {
                 new CONST(0),
                 new CONST(1),
-                new CALL(2, new BinaryIdentifierNode { Operation = Operation.Add }),
+                new VIRTUAL(2, new BinaryIdentifierNode { Operation = Operation.Add }),
                 new COPY(),
                 new GETF(0),
                 new PRINT(),

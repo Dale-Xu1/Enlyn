@@ -40,7 +40,8 @@ public record struct SETF(int index) : IOpcode;
 public record struct JUMP(int ip) : IOpcode;
 public record struct JUMPF(int ip) : IOpcode;
 
-public record struct CALL(int type, IIdentifierNode name) : IOpcode;
+public record struct INVOKE(int type, IIdentifierNode name) : IOpcode;
+public record struct VIRTUAL(int type, IIdentifierNode name) : IOpcode;
 public record struct RETURN : IOpcode;
 
 public record struct PRINT : IOpcode; // TODO: Remove print opcode
@@ -99,6 +100,7 @@ public class Executable
             Chunks = new()
             {
                 [new IdentifierNode { Value = "new" }] = new NativeChunk { Arguments = 1, Function = _ => null },
+                [new IdentifierNode { Value = "null" }] = new NativeChunk { Arguments = 1, Function = _ => null },
                 [new BinaryIdentifierNode { Operation = Operation.Eq }] = new NativeChunk
                 {
                     Arguments = 2,
@@ -235,10 +237,17 @@ public class VirtualMachine
         this.executable = executable;
 
         Construct construct = executable.Constructs[executable.Main];
-        Chunk chunk = (Chunk) construct.Chunks[Environment.constructor];
+        Chunk chunk = (Chunk) construct.Chunks[Compiler.fieldInit];
 
         frame = new Frame(chunk);
-        frame.Variables[0] = new Instance(construct.Fields) { Type = executable.Main };
+        Instance instance = new(construct.Fields) { Type = executable.Main };
+        frame.Variables[0] = instance;
+        Run();
+
+        chunk = (Chunk) construct.Chunks[Environment.constructor];
+
+        frame = new Frame(chunk);
+        frame.Variables[0] = instance;
     }
 
     public void Run()
@@ -385,7 +394,27 @@ public class VirtualMachine
         if (!condition.Value) frame.ip = opcode.ip;
     }
 
-    private void Handle(CALL opcode)
+    private void Handle(INVOKE opcode)
+    {
+        IChunk chunk = GetChunk(opcode.type, opcode.name);
+
+        Instance?[] arguments = new Instance?[chunk.Arguments];
+        for (int i = chunk.Arguments - 1; i >= 0; i--) arguments[i] = frame.Stack.Pop();
+
+        if (chunk is NativeChunk native)
+        {
+            Instance? value = native.Function(arguments);
+            frame.Stack.Push(value);
+
+            return;
+        }
+
+        // Transfer arguments to variable array
+        frame = new Frame((Chunk) chunk, frame);
+        for (int i = 0; i < arguments.Length; i++) frame.Variables[i] = arguments[i];
+    }
+
+    private void Handle(VIRTUAL opcode)
     {
         IChunk chunk = GetChunk(opcode.type, opcode.name);
 
@@ -393,6 +422,8 @@ public class VirtualMachine
         for (int i = chunk.Arguments - 1; i >= 0; i--) arguments[i] = frame.Stack.Pop();
 
         Instance instance = arguments[0]!;
+        chunk = GetChunk(instance.Type, opcode.name); // This is really wasteful
+
         if (chunk is NativeChunk native)
         {
             Instance? value = native.Function(arguments);

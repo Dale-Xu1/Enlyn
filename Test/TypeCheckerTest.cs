@@ -81,6 +81,8 @@ public class TypeCheckerTest
         Type any = environment.Classes[new TypeNode { Value = "any" }];
         Assert.AreEqual(Access.Public, field.Access);
         Assert.AreEqual(any, field.Type);
+
+        Assert.AreEqual(0, error.Errors.Count);
     }
 
     [TestMethod]
@@ -111,6 +113,8 @@ public class TypeCheckerTest
         Assert.AreEqual(2, main.Parameters.Length);
         Assert.AreEqual(a, main.Parameters[0]);
         Assert.AreEqual(b, main.Parameters[1]);
+
+        Assert.AreEqual(0, error.Errors.Count);
     }
 
     [TestMethod]
@@ -413,7 +417,31 @@ public class TypeCheckerTest
         ErrorLogger error = CheckProgram(input);
 
         Assert.AreEqual(1, error.Errors.Count);
-        Assert.AreEqual("Main class constructor cannot have arguments", error.Errors[0].Message);
+        Assert.AreEqual("Main class constructor cannot define arguments", error.Errors[0].Message);
+    }
+    
+    [TestMethod]
+    public void TestBaseMethodCall()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class A : B",
+            "{",
+            "    public new() : base() = return",
+            "    public override f(x : any)",
+            "    {",
+            "        this.f(x)",
+            "        base.f(x)",
+            "    }",
+            "}",
+            "class B",
+            "{",
+            "    public new() = return",
+            "    protected f(x : number) { }",
+            "}", program);
+        ErrorLogger error = CheckProgram(input);
+
+        Assert.AreEqual(1, error.Errors.Count);
+        Assert.AreEqual("Type any is not compatible with number", error.Errors[0].Message);
     }
 
     [TestMethod]

@@ -51,7 +51,7 @@ public class ConstructorNode : LocationNode, IMemberNode
     public Access Access { get; init; }
 
     public ParameterNode[] Parameters { get; init; } = null!;
-    public IExpressionNode[] Arguments { get; init; } = null!;
+    public IExpressionNode[]? Arguments { get; init; }
 
     public IStatementNode Body { get; init; } = null!;
 }
@@ -350,16 +350,20 @@ public class ParseTreeVisitor : EnlynBaseVisitor<INode>
         };
     }
 
-    public override ConstructorNode VisitConstructor(EnlynParser.ConstructorContext context) => new()
+    public override ConstructorNode VisitConstructor(EnlynParser.ConstructorContext context)
     {
-        Access = VisitAccess(context.visibility()),
+        EnlynParser.ExprListContext? arguments = context.exprList();
+        return new()
+        {
+            Access = VisitAccess(context.visibility()),
 
-        Arguments = VisitList<IExpressionNode>(context.exprList()?.expr()),
-        Parameters = VisitList<ParameterNode>(context.paramList()?.param()),
+            Arguments = arguments is null ? null : VisitList<IExpressionNode>(arguments.expr()),
+            Parameters = VisitList<ParameterNode>(context.paramList()?.param()),
 
-        Body = VisitBlockStmt(context.block(), context.stmt()),
-            Location = GetLocation(context)
-    };
+            Body = VisitBlockStmt(context.block(), context.stmt()),
+                Location = GetLocation(context)
+        };
+    }
 
     public override ParameterNode VisitParam(EnlynParser.ParamContext context) => new()
     {
