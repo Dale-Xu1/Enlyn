@@ -347,7 +347,7 @@ public class VirtualMachine
         if (expected == target) return true;
         Construct construct = executable.Constructs[target];
 
-        if (construct.Parent is int parent) TestType(expected, parent);
+        if (construct.Parent is int parent) return TestType(expected, parent);
         return false;
     }
 

@@ -1,6 +1,12 @@
 ﻿using Antlr4.Runtime;
 using Enlyn;
 
+if (args.Length < 1)
+{
+    Console.Error.WriteLine("Usage: enlyn <path>");
+    return;
+}
+
 string file = args[0];
 using StreamReader reader = new(file);
 
@@ -21,6 +27,7 @@ TypeChecker checker = new(error);
 checker.Visit(tree);
 
 error.LogErrors();
+if (error.Errors.Count > 0) return;
 
 Compiler compiler = new(checker.Environment, error);
 Executable executable = compiler.Compile(tree);

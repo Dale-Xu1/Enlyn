@@ -184,6 +184,7 @@ public class CompilerTest
             "        this.out(b is boolean)",
             "        this.out(null is string???)",
             "        this.out(a is null)",
+            "        this.out(b is any)",
             "    }",
             "}");
 
@@ -195,7 +196,7 @@ public class CompilerTest
 
         interpreter.Run();
         Assert.AreEqual(string.Join(Environment.NewLine,
-            "false", "true", "false", "true", "true", ""), writer.ToString());
+            "false", "true", "false", "true", "true", "true", ""), writer.ToString());
     }
 
 }

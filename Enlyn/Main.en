@@ -1,29 +1,28 @@
-class A { }
-class B : A
-{
-    public x : number
-}
-
 class Main : IO
 {
     public new()
     {
         let a : A = new B()
-        let x = a as B.x
-        let y : boolean = a is null
+        a.f()
 
-        let z : any? = null
-        z as A?
-
-        let io = new IO()
-        if true then io.out(1 + 2 == 3)
-        else io.out("Hi")
+        if a is null then return
 
         let i = 0
         while i < 10
         {
-            io.out(i)
+            this.out(i)
             i = i + 1
         }
     }
+}
+
+class A
+{
+    protected io : IO = new IO()
+    public f() = this.io.out("A")
+}
+
+class B : A
+{
+    public override f() = this.io.out("B")
 }
