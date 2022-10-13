@@ -13,6 +13,9 @@ class Main : IO
             this.out(i)
             i = i + 1
         }
+
+        let name = this.in()
+        this.out("Hi " + name)
     }
 }
 
