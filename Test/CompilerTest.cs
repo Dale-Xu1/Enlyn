@@ -141,19 +141,21 @@ public class CompilerTest
         Assert.AreEqual(6, executable.Constructs[6].Fields);
     }
 
-// TODO: Field initializers and constructors should be considered separate methods
-
     [TestMethod]
     public void TestFieldInitializer()
     {
         string input = string.Join(Environment.NewLine,
             "class Main : A",
             "{",
-            "    public new() = new IO().out(this.a)",
+            "    public new()",
+            "    {",
+            "        this.a = \"12345\"",
+            "        new IO().out(this.a.length)",
+            "    }",
             "}",
             "class A",
             "{",
-            "    public a : number = 5",
+            "    public a : string = \"123\"",
             "}");
 
         Executable executable = Compile(input);
@@ -165,6 +167,35 @@ public class CompilerTest
         interpreter.Run();
         Assert.AreEqual(string.Join(Environment.NewLine,
             "5", ""), writer.ToString());
+    }
+
+    [TestMethod]
+    public void TestCastAndInstance()
+    {
+        string input = string.Join(Environment.NewLine,
+            "class Main : IO",
+            "{",
+            "    public new()",
+            "    {",
+            "        let a : number? = null",
+            "        this.out(a is number)",
+            "        this.out(a is number?)",
+            "        let b : any = 5",
+            "        this.out(b is boolean)",
+            "        this.out(null is string???)",
+            "        this.out(a is null)",
+            "    }",
+            "}");
+
+        Executable executable = Compile(input);
+        VirtualMachine interpreter = new(executable);
+
+        using StringWriter writer = new();
+        Console.SetOut(writer);
+
+        interpreter.Run();
+        Assert.AreEqual(string.Join(Environment.NewLine,
+            "false", "true", "false", "true", "true", ""), writer.ToString());
     }
 
 }

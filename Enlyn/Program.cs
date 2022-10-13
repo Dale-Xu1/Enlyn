@@ -21,3 +21,9 @@ TypeChecker checker = new(error);
 checker.Visit(tree);
 
 error.LogErrors();
+
+Compiler compiler = new(checker.Environment, error);
+Executable executable = compiler.Compile(tree);
+
+VirtualMachine interpreter = new(executable);
+interpreter.Run();

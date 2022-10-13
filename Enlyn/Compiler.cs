@@ -104,6 +104,13 @@ public class CChunk
 
 
     public void Emit(IOpcode opcode) => Instructions.Add(opcode);
+    public int EmitPlaceholder()
+    {
+        Instructions.Add(null!);
+        return Instructions.Count - 1;
+    }
+
+    public void Emit(int i, IOpcode opcode) => Instructions[i] = opcode;
 
     public void AddThis() { offset++; locals++; }
     public int AddVariable(IdentifierNode node)
@@ -146,8 +153,8 @@ public class Compiler : ASTVisitor<object?>
     
     private readonly List<Instance> constants = new();
 
-    private CConstruct currentConstruct = null!;
-    private CChunk currentChunk = null!;
+    private CConstruct curConst = null!;
+    private CChunk curr = null!;
 
 
     public Compiler(Environment environment, ErrorLogger error)
@@ -210,7 +217,7 @@ public class Compiler : ASTVisitor<object?>
             case MethodNode method: methods.Add(method); break;
         }
 
-        currentConstruct = constructs[node.Identifier];
+        curConst = constructs[node.Identifier];
 
         Visit(fields.ToArray());
         if (constructor is not null) Visit(constructor);
@@ -223,15 +230,15 @@ public class Compiler : ASTVisitor<object?>
     private void Visit(FieldNode[] fields)
     {
         CChunk chunk = new() { Arguments = 1 };
-        currentConstruct.Chunks[fieldInit] = chunk;
-        currentChunk = chunk;
+        curConst.Chunks[fieldInit] = chunk;
+        curr = chunk;
 
         chunk.AddThis();
 
         // Base call
-        currentChunk.Emit(new LOAD(0));
-        currentChunk.Emit(new INVOKE(currentConstruct.Parent!.Index, fieldInit));
-        currentChunk.Emit(new POP());
+        curr.Emit(new LOAD(0));
+        curr.Emit(new INVOKE(curConst.Parent!.Index, fieldInit));
+        curr.Emit(new POP());
 
         foreach (FieldNode field in fields)
         {
@@ -239,7 +246,8 @@ public class Compiler : ASTVisitor<object?>
 
             chunk.Emit(new LOAD(0));
             Visit(field.Expression);
-            chunk.Emit(new SETF(currentConstruct.Fields[field.Identifier]));
+            chunk.Emit(new SETF(curConst.Fields[field.Identifier]));
+            chunk.Emit(new POP());
         }
 
         chunk.Emit(new NULL());
@@ -249,8 +257,8 @@ public class Compiler : ASTVisitor<object?>
     public override object? Visit(MethodNode node)
     {
         CChunk chunk = new() { Arguments = node.Parameters.Length + 1 };
-        currentConstruct.Chunks[node.Identifier] = chunk;
-        currentChunk = chunk;
+        curConst.Chunks[node.Identifier] = chunk;
+        curr = chunk;
         
         chunk.AddThis();
         foreach (ParameterNode param in node.Parameters) chunk.AddVariable(param.Identifier);
@@ -265,8 +273,8 @@ public class Compiler : ASTVisitor<object?>
     public override object? Visit(ConstructorNode node)
     {
         CChunk chunk = new() { Arguments = node.Parameters.Length + 1 };
-        currentConstruct.Chunks[Environment.constructor] = chunk;
-        currentChunk = chunk;
+        curConst.Chunks[Environment.constructor] = chunk;
+        curr = chunk;
 
         chunk.AddThis();
         foreach (ParameterNode param in node.Parameters) chunk.AddVariable(param.Identifier);
@@ -274,10 +282,10 @@ public class Compiler : ASTVisitor<object?>
         // Base call
         if (node.Arguments is not null)
         {
-            currentChunk.Emit(new LOAD(0));
+            curr.Emit(new LOAD(0));
             foreach (IExpressionNode expression in node.Arguments) Visit(expression);
-            currentChunk.Emit(new INVOKE(currentConstruct.Parent!.Index, Environment.constructor));
-            currentChunk.Emit(new POP());
+            curr.Emit(new INVOKE(curConst.Parent!.Index, Environment.constructor));
+            curr.Emit(new POP());
         }
 
         Visit(node.Body);
@@ -291,17 +299,47 @@ public class Compiler : ASTVisitor<object?>
 
     public override object? Visit(LetNode node)
     {
-        int i = currentChunk.AddVariable(node.Identifier);
+        int i = curr.AddVariable(node.Identifier);
         Visit(node.Expression);
-        currentChunk.Emit(new STORE(i));
+        curr.Emit(new STORE(i));
+        return null;
+    }
+
+    public override object? Visit(IfNode node) // TODO: Control flow
+    {
+        Visit(node.Condition);
+        int thenJump = curr.EmitPlaceholder();
+        Visit(node.Then);
+
+        if (node.Else is not null)
+        {
+            int elseJump = curr.EmitPlaceholder();
+            curr.Emit(thenJump, new JUMPF(curr.Instructions.Count));
+            Visit(node.Else);
+
+            curr.Emit(elseJump, new JUMP(curr.Instructions.Count));
+        }
+        else curr.Emit(thenJump, new JUMPF(curr.Instructions.Count));
+        return null;
+    }
+
+    public override object? Visit(WhileNode node)
+    {
+        int start = curr.Instructions.Count;
+        Visit(node.Condition);
+        int jump = curr.EmitPlaceholder();
+        Visit(node.Body);
+
+        curr.Emit(new JUMP(start));
+        curr.Emit(jump, new JUMPF(curr.Instructions.Count));
         return null;
     }
 
     public override object? Visit(ReturnNode node)
     {
-        if (node.Expression is null) currentChunk.Emit(new NULL());
+        if (node.Expression is null) curr.Emit(new NULL());
         else Visit(node.Expression);
-        currentChunk.Emit(new RETURN());
+        curr.Emit(new RETURN());
         return null;
     }
 
@@ -314,7 +352,7 @@ public class Compiler : ASTVisitor<object?>
     public override object? Visit(ExpressionStatementNode node)
     {
         Visit(node.Expression);
-        currentChunk.Emit(new POP());
+        curr.Emit(new POP());
 
         return null;
     }
@@ -325,7 +363,7 @@ public class Compiler : ASTVisitor<object?>
         Visit(node.Target);
 
         int i = constructs[Environment.Types[node].Name].Fields[node.Identifier];
-        currentChunk.Emit(new GETF(i));
+        curr.Emit(new GETF(i));
         return null;
     }
 
@@ -336,42 +374,160 @@ public class Compiler : ASTVisitor<object?>
         foreach (IExpressionNode expression in node.Arguments) Visit(expression);
 
         int i = constructs[Environment.Types[node].Name].Index;
-        currentChunk.Emit(new VIRTUAL(i, access.Identifier));
+        curr.Emit(new VIRTUAL(i, access.Identifier));
         return null;
     }
 
     public override object? Visit(NewNode node)
     {
         int i = constructs[node.Type].Index;
-        currentChunk.Emit(new NEW(i));
-
-        currentChunk.Emit(new COPY());
-        currentChunk.Emit(new INVOKE(i, fieldInit));
-        currentChunk.Emit(new POP());
-        
-        currentChunk.Emit(new COPY());
+        curr.Emit(new NEW(i));
+        curr.Emit(new COPY());
 
         foreach (IExpressionNode expression in node.Arguments) Visit(expression);
-        currentChunk.Emit(new INVOKE(i, Environment.constructor));
-        currentChunk.Emit(new POP());
+        curr.Emit(new INVOKE(i, Environment.constructor));
+        curr.Emit(new POP());
+        return null;
+    }
+
+    public override object? Visit(AssertNode node) => Visit(node.Expression);
+    public override object? Visit(AssignNode node)
+    {
+        if (node.Target is IdentifierNode id)
+        {
+            Visit(node.Expression);
+            curr.Emit(new STORE(curr.Scope[id]));
+        }
+        else if (node.Target is AccessNode access)
+        {
+            Visit(access.Target);
+            Visit(node.Expression);
+
+            int i = constructs[Environment.Types[access].Name].Fields[access.Identifier];
+            curr.Emit(new SETF(i));
+        }
+        return null;
+    }
+
+    public override object? Visit(InstanceNode node)
+    {
+        Visit(node.Expression);
+        if (node.Type is null)
+        {
+            curr.Emit(new INST(0, false));
+            curr.Emit(new NOT());
+        }
+        else
+        {
+            (int i, bool option) = GetOpcodeArgs(node.Type);
+            curr.Emit(new INST(i, option));
+        }
+        return null;
+    }
+
+    public override object? Visit(CastNode node)
+    {
+        Visit(node.Expression);
+        (int i, bool option) = GetOpcodeArgs(node.Type);
+        curr.Emit(new CAST(i, option));
+        return null;
+    }
+
+    private (int i, bool option) GetOpcodeArgs(ITypeNode node) => node switch
+    {
+        OptionNode option => (GetOpcodeArgs(option.Type).i, true),
+        TypeNode type => (constructs[type].Index, false),
+        _ => throw new Exception("unexpected")
+    };
+
+    public override object? Visit(BinaryNode node)
+    {
+        Visit(node.Left);
+        Visit(node.Right);
+        Type type = Environment.Types[node];
+
+        if (type == Standard.Number)
+        {
+            IOpcode? opcode = null;
+            switch (node.Operation)
+            {
+                case Operation.Add: opcode = new ADD(); break;
+                case Operation.Sub: opcode = new SUB(); break;
+                case Operation.Mul: opcode = new MUL(); break;
+                case Operation.Div: opcode = new DIV(); break;
+                case Operation.Mod: opcode = new MOD(); break;
+
+                case Operation.Lt:  opcode = new LT();  break;
+                case Operation.Gt:  opcode = new GT();  break;
+                case Operation.Le:  opcode = new LE();  break;
+                case Operation.Ge:  opcode = new GE();  break;
+            }
+
+            if (opcode is not null)
+            {
+                curr.Emit(opcode);
+                return null;
+            }
+        }
+        else if (type == Standard.Boolean)
+        {
+            IOpcode? opcode = null;
+            switch (node.Operation)
+            {
+                case Operation.And: opcode = new AND(); break;
+                case Operation.Or:  opcode = new OR();  break;
+            }
+
+            if (opcode is not null)
+            {
+                curr.Emit(opcode);
+                return null;
+            }
+        }
+
+        int i = constructs[type.Name].Index;
+        curr.Emit(new VIRTUAL(i, new BinaryIdentifierNode() { Operation = node.Operation }));
+
+        return null;
+    }
+
+    public override object? Visit(UnaryNode node)
+    {
+        Visit(node.Expression);
+        Type type = Environment.Types[node];
+
+        if (type == Standard.Number && node.Operation == Operation.Neg)
+        {
+            curr.Emit(new NEG());
+            return null;
+        }
+        else if (type == Standard.Boolean && node.Operation == Operation.Not)
+        {
+            curr.Emit(new NOT());
+            return null;
+        }
+
+        int i = constructs[type.Name].Index;
+        curr.Emit(new VIRTUAL(i, new BinaryIdentifierNode() { Operation = node.Operation }));
+
         return null;
     }
 
     public override object? Visit(IdentifierNode node)
     {
-        int i = currentChunk.Scope[node];
-        currentChunk.Emit(new LOAD(i));
+        int i = curr.Scope[node];
+        curr.Emit(new LOAD(i));
         return null;
     }
 
     public override object? Visit(NumberNode node)
     {
-        if (node.Value == 0) currentChunk.Emit(new ZERO());
-        else if (node.Value == 1) currentChunk.Emit(new ONE());
+        if (node.Value == 0) curr.Emit(new ZERO());
+        else if (node.Value == 1) curr.Emit(new ONE());
         else
         {
             int i = AddConstant(new NumberInstance { Value = node.Value });
-            currentChunk.Emit(new CONST(i));
+            curr.Emit(new CONST(i));
         }
 
         return null;
@@ -380,13 +536,13 @@ public class Compiler : ASTVisitor<object?>
     public override object? Visit(StringNode node)
     {
         int i = AddConstant(new StringInstance(node.Value));
-        currentChunk.Emit(new CONST(i));
+        curr.Emit(new CONST(i));
         return null;
     }
 
     public override object? Visit(BooleanNode node)
     {
-        currentChunk.Emit(node.Value ? new TRUE() : new FALSE());
+        curr.Emit(node.Value ? new TRUE() : new FALSE());
         return null;
     }
 
@@ -395,13 +551,13 @@ public class Compiler : ASTVisitor<object?>
 
     private object? This()
     {
-        currentChunk.Emit(new LOAD(0));
+        curr.Emit(new LOAD(0));
         return null;
     }
 
     public override object? Visit(NullNode _)
     {
-        currentChunk.Emit(new NULL());
+        curr.Emit(new NULL());
         return null;
     }
 

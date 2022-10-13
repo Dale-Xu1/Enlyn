@@ -283,7 +283,7 @@ public class TypeCheckerTest
 
         Assert.AreEqual(2, error.Errors.Count);
         Assert.AreEqual("Invalid assertion target", error.Errors[0].Message);
-        Assert.AreEqual("Type any is not compatible with null", error.Errors[1].Message);
+        Assert.AreEqual("Cannot cast from null to any", error.Errors[1].Message);
     }
 
     [TestMethod]

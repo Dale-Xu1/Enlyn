@@ -1,12 +1,29 @@
 class A { }
-
 class B : A
 {
-    private x : number
+    public x : number
+}
+
+class Main : IO
+{
     public new()
     {
         let a : A = new B()
         let x = a as B.x
         let y : boolean = a is null
+
+        let z : any? = null
+        z as A?
+
+        let io = new IO()
+        if true then io.out(1 + 2 == 3)
+        else io.out("Hi")
+
+        let i = 0
+        while i < 10
+        {
+            io.out(i)
+            i = i + 1
+        }
     }
 }

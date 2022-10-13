@@ -30,8 +30,8 @@ public record struct AND : IOpcode;
 public record struct OR  : IOpcode;
 public record struct NOT : IOpcode;
 
-public record struct CAST(int type) : IOpcode;
-public record struct INST(int type) : IOpcode;
+public record struct CAST(int type, bool option) : IOpcode;
+public record struct INST(int type, bool option) : IOpcode;
 
 public record struct NEW(int type) : IOpcode;
 public record struct GETF(int index) : IOpcode;
@@ -43,8 +43,6 @@ public record struct JUMPF(int ip) : IOpcode;
 public record struct INVOKE(int type, IIdentifierNode name) : IOpcode;
 public record struct VIRTUAL(int type, IIdentifierNode name) : IOpcode;
 public record struct RETURN : IOpcode;
-
-public record struct PRINT : IOpcode; // TODO: Remove print opcode
 
 public class Instance
 {
@@ -146,7 +144,11 @@ public class Executable
                         Console.WriteLine(args[1] switch
                         {
                             NumberInstance n => n.Value,
-                            BooleanInstance b => b.Value,
+                            BooleanInstance b => b.Value switch
+                            {
+                                true => "true",
+                                false => "false"
+                            },
                             StringInstance s => s.Value,
 
                             null => "null",
@@ -284,6 +286,8 @@ public class VirtualMachine
     {
         Instance? value = frame.Stack.Pop();
         frame.Variables[opcode.index] = value;
+
+        frame.Stack.Push(value);
     }
 
     private void Handle(POP _) => frame.Stack.Pop();
@@ -350,7 +354,8 @@ public class VirtualMachine
     private void Handle(CAST opcode)
     {
         Instance? value = frame.Stack.Peek();
-        if (value is null || TestType(opcode.type, value.Type)) return;
+        if (opcode.option && value is null) return;
+        if (value is not null && TestType(opcode.type, value.Type)) return;
 
         throw new Exception("Invalid cast");
     }
@@ -359,6 +364,7 @@ public class VirtualMachine
     {
         Instance? value = frame.Stack.Pop();
         bool result = value is null ? false : TestType(opcode.type, value.Type);
+        if (opcode.option && value is null) result = true;
 
         frame.Stack.Push(new BooleanInstance { Value = result });
     }
@@ -368,6 +374,19 @@ public class VirtualMachine
     {
         Construct construct = executable.Constructs[opcode.type];
         Instance instance = new(construct.Fields) { Type = opcode.type };
+
+        IChunk chunk = GetChunk(opcode.type, Compiler.fieldInit);
+        if (chunk is NativeChunk native) native.Function(new[] { instance });
+        else
+        {
+            Frame prev = frame;
+    
+            frame = new Frame((Chunk) chunk);
+            frame.Variables[0] = instance;
+            Run();
+
+            frame = prev;
+        }
 
         frame.Stack.Push(instance);
     }
@@ -384,6 +403,7 @@ public class VirtualMachine
         Instance instance = frame.Stack.Pop()!;
 
         instance.Fields[opcode.index] = value;
+        frame.Stack.Push(value);
     }
 
 
@@ -453,21 +473,6 @@ public class VirtualMachine
 
         // Place popped value onto new frame if it not the last one
         if (frame is not null) frame.Stack.Push(value);
-    }
-
-
-    private void Handle(PRINT _)
-    {
-        Instance? value = frame.Stack.Pop();
-        Console.WriteLine(value switch
-        {
-            NumberInstance n => n.Value,
-            BooleanInstance b => b.Value,
-            StringInstance s => s.Value,
-
-            null => "null",
-            _ => "instance"
-        });
     }
 
 }

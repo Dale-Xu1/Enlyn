@@ -87,6 +87,8 @@ public class Type
         }
     }
 
+    public override string ToString() => Name.ToString();
+
 }
 
 public class Null : Type { public Null() : base("null") { } }
@@ -94,7 +96,10 @@ public class Option : Type
 {
 
     public Type Type { get; init; } = null!;
-    public Option() : base("option") { }
+    public Option() : base("") { }
+
+
+    public override string ToString() => Type + "?";
 
 }
 
@@ -239,10 +244,34 @@ public class Environment
 
             default: Test(e.Type, target); break;
         }
-        else if (target is Option or Null) throw new EnlynError($"Type {expected.Name} is not an option");
+        else if (target is Option or Null) throw new EnlynError($"Type {expected} is not an option");
         else if (!Check(expected, target))
-            throw new EnlynError($"Type {target.Name} is not compatible with {expected.Name}");
+            throw new EnlynError($"Type {target} is not compatible with {expected}");
 
+        bool Check(Type expected, Type target)
+        {
+            if (expected == target) return true;
+            if (target.Parent is null) return false;
+
+            // Check if expected type is a parent of the target
+            return Check(expected, target.Parent);
+        }
+    }
+
+    public static bool TestResult(Type expected, Type target)
+    {
+        if (expected is Option e) switch (target)
+        {
+            case Option t: return TestResult(e.Type, t.Type);
+            case Null: break;
+
+            default: return TestResult(e.Type, target);
+        }
+        else if (target is Option or Null) return false;
+        else if (!Check(expected, target))
+            return false;
+
+        return true;
         bool Check(Type expected, Type target)
         {
             if (expected == target) return true;
@@ -701,7 +730,8 @@ internal class ExpressionVisitor : EnvironmentVisitor<Type>
         Type result = new TypeVisitor(Environment).Visit(type);
 
         // Result should be more specific
-        Environment.Test(target, result);
+        if (!Environment.TestResult(target, result) && !Environment.TestResult(result, target))
+            throw new EnlynError($"Cannot cast from {target} to {result}");
         return result;
     }
 

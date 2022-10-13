@@ -27,10 +27,10 @@ public class VirtualMachineTest
             Instructions = new IOpcode[]
             {
                 new ONE(),
-                new CAST(1),
+                new CAST(1, false),
                 new CONST(0),
                 new ADD(),
-                new PRINT(),
+                new POP(),
                 new NULL(),
                 new RETURN()
             },
@@ -62,8 +62,8 @@ public class VirtualMachineTest
                 new VIRTUAL(2, new BinaryIdentifierNode { Operation = Operation.Add }),
                 new COPY(),
                 new GETF(0),
-                new PRINT(),
-                new PRINT(),
+                new POP(),
+                new POP(),
                 new NULL(),
                 new RETURN()
             },
