@@ -2,7 +2,7 @@
 
 ## Overview
 
-A compiled statically-typed class-based programming language. This isn't a serious programming language since it compiles to a custom-written interpreter, nor does it have any innovative features.
+A compiled statically-typed class-based programming language. This is a toy programming language and it compiles to a custom-written interpreter, so it does not have any innovative features unfortunately.
 
 ## Setup
 
@@ -11,7 +11,7 @@ Clone the repository and cd into the Enlyn project. Then run the following comma
 dotnet run <path>
 ```
 
-An example program has been written into the file `Main.en`, so you can run that to start and edit it as you want.
+An example program has been written into the file `Main.en`, so you can run the program to start and edit it as you want.
 
 ## Example Program
 

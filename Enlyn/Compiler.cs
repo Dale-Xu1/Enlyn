@@ -305,17 +305,23 @@ public class Compiler : ASTVisitor<object?>
         return null;
     }
 
-    public override object? Visit(IfNode node) // TODO: Control flow
+    public override object? Visit(IfNode node)
     {
         Visit(node.Condition);
         int thenJump = curr.EmitPlaceholder();
+
+        curr.Enter();
         Visit(node.Then);
+        curr.Exit();
 
         if (node.Else is not null)
         {
             int elseJump = curr.EmitPlaceholder();
             curr.Emit(thenJump, new JUMPF(curr.Instructions.Count));
+
+            curr.Enter();
             Visit(node.Else);
+            curr.Exit();
 
             curr.Emit(elseJump, new JUMP(curr.Instructions.Count));
         }
@@ -328,7 +334,10 @@ public class Compiler : ASTVisitor<object?>
         int start = curr.Instructions.Count;
         Visit(node.Condition);
         int jump = curr.EmitPlaceholder();
+
+        curr.Enter();
         Visit(node.Body);
+        curr.Exit();
 
         curr.Emit(new JUMP(start));
         curr.Emit(jump, new JUMPF(curr.Instructions.Count));
