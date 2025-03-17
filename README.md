@@ -2,7 +2,7 @@
 
 ## Overview
 
-A compiled statically-typed class-based programming language. This is a toy programming language and it compiles to a custom-written interpreter, so it does not have any innovative features unfortunately.
+A compiled statically-typed class-based programming language. This is a toy programming language and compiles to a custom-written interpreter.
 
 ## Setup
 
